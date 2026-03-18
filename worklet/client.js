@@ -1,7 +1,10 @@
 // Android VPN worklet — runs inside Bare runtime
-// Receives TUN fd and config from Kotlin via IPC, connects to HyperDHT server
+// Two-phase startup: connect DHT first (over regular internet),
+// then receive TUN fd after Kotlin establishes the VPN.
+// This avoids a routing deadlock where VPN routes would block
+// the DHT from reaching the internet to find the server.
 
-/* global Bare, BareKit */
+/* global BareKit */
 
 const HyperDHT = require('hyperdht')
 const { encode, createDecoder, startKeepalive } = require('./framing')
@@ -14,11 +17,11 @@ const ipc = BareKit.IPC
 
 let dht = null
 let activeConnection = null
-let tunFd = null
 let tunReader = null
 let tunWriter = null
 let shuttingDown = false
 let retryDelay = INITIAL_RETRY_MS
+let tunReady = false // true once we receive the TUN fd from Kotlin
 
 function sendToKotlin (msg) {
   ipc.write(Buffer.from(JSON.stringify(msg) + '\n'))
@@ -49,6 +52,25 @@ function setupTun (fd) {
       sendToKotlin({ type: 'error', message: 'TUN read error: ' + err.message })
     }
   })
+
+  tunReady = true
+}
+
+// Try to extract the native socket fd for VpnService.protect().
+// The fd path depends on the runtime — try several known locations.
+function getSocketFd (connection) {
+  const rawStream = connection.rawStream
+  if (rawStream && rawStream.socket) {
+    if (typeof rawStream.socket.fd === 'number') return rawStream.socket.fd
+    const handle = rawStream.socket._handle
+    if (handle && typeof handle.fd === 'number') return handle.fd
+  }
+  if (dht && dht.socket) {
+    if (typeof dht.socket.fd === 'number') return dht.socket.fd
+    const handle = dht.socket._handle
+    if (handle && typeof handle.fd === 'number') return handle.fd
+  }
+  return null
 }
 
 function connect (serverKey, connectOpts) {
@@ -57,21 +79,28 @@ function connect (serverKey, connectOpts) {
   activeConnection = connection
 
   const decode = createDecoder(function (packet) {
-    if (tunWriter) {
+    if (tunWriter && tunReady) {
       tunWriter.write(packet)
     }
   })
 
   connection.on('open', function () {
     retryDelay = INITIAL_RETRY_MS
-    sendToKotlin({ type: 'status', connected: true })
-    startKeepalive(connection)
 
-    // Request protection for the DHT socket fd
-    const rawStream = connection.rawStream
-    if (rawStream && rawStream.socket && rawStream.socket.fd) {
-      sendToKotlin({ type: 'protect', fd: rawStream.socket.fd })
+    if (!tunReady) {
+      // First connection — ask Kotlin to protect the DHT socket,
+      // then establish the VPN and send us the TUN fd.
+      const fd = getSocketFd(connection)
+      if (fd !== null) {
+        sendToKotlin({ type: 'protect', fd: fd })
+      }
+      sendToKotlin({ type: 'connected' })
+    } else {
+      // Reconnection — TUN already active, just resume forwarding
+      sendToKotlin({ type: 'status', connected: true })
     }
+
+    startKeepalive(connection)
   })
 
   connection.on('data', function (data) {
@@ -130,9 +159,7 @@ ipc.on('data', function (data) {
     }
 
     if (msg.type === 'start') {
-      tunFd = msg.tunFd
-      setupTun(tunFd)
-
+      // Phase 1: create DHT and connect over regular internet (no VPN routes yet)
       dht = new HyperDHT()
 
       const connectOpts = {}
@@ -143,6 +170,12 @@ ipc.on('data', function (data) {
       }
 
       connect(msg.serverKey, connectOpts)
+    }
+
+    if (msg.type === 'tun') {
+      // Phase 2: VPN is established, start packet forwarding
+      setupTun(msg.tunFd)
+      sendToKotlin({ type: 'status', connected: true })
     }
 
     if (msg.type === 'stop') {

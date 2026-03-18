@@ -33,6 +33,17 @@
         android:inputType="textNoSuggestions|textPassword"
         android:fontFamily="monospace"
         android:textSize="14sp"
+        android:layout_marginBottom="16dp" />
+
+    <EditText
+        android:id="@+id/ipInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Client IP (e.g. 10.0.0.2/24)"
+        android:text="10.0.0.2/24"
+        android:inputType="textNoSuggestions"
+        android:fontFamily="monospace"
+        android:textSize="14sp"
         android:layout_marginBottom="24dp" />
 
     <Button
