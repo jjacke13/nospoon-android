@@ -1,0 +1,17 @@
+{
+  "name": "nospoon-android",
+  "version": "0.1.0",
+  "private": true,
+  "description": "nospoon Android VPN app - Bare worklet dependencies",
+  "scripts": {
+    "link": "bare-link --preset android --needs libbare-kit.so --out app/src/main/addons",
+    "pack": "bare-pack --preset android --linked --out app/src/main/assets/client.bundle worklet/client.js"
+  },
+  "dependencies": {
+    "hyperdht": "^6.29.1"
+  },
+  "devDependencies": {
+    "bare-link": "latest",
+    "bare-pack": "latest"
+  }
+}
