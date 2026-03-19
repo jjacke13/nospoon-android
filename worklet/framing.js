@@ -44,9 +44,15 @@ function createDecoder (onPacket, onOverflow) {
 // The decoder silently ignores zero-length packets.
 const KEEPALIVE = Buffer.alloc(4, 0)
 
-const KEEPALIVE_INTERVAL_MS = 25000
+const KEEPALIVE_INTERVAL_MS = 10000
 
 function startKeepalive (connection) {
+  // Send immediately — don't wait for the first interval tick.
+  // UDX will idle-timeout if no data flows before the first keepalive.
+  if (!connection.destroyed) {
+    connection.write(KEEPALIVE)
+  }
+
   const interval = setInterval(function () {
     if (!connection.destroyed) {
       connection.write(KEEPALIVE)
@@ -54,8 +60,6 @@ function startKeepalive (connection) {
       clearInterval(interval)
     }
   }, KEEPALIVE_INTERVAL_MS)
-
-  interval.unref()
 
   connection.on('close', function () {
     clearInterval(interval)

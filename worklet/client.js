@@ -15,6 +15,8 @@ const MAX_RETRY_MS = 30000
 // IPC protocol: JSON messages delimited by newlines
 const ipc = BareKit.IPC
 
+const MAX_FAILURES_BEFORE_RESTART = 3
+
 let dht = null
 let activeConnection = null
 let tunReader = null
@@ -22,6 +24,11 @@ let tunWriter = null
 let shuttingDown = false
 let retryDelay = INITIAL_RETRY_MS
 let tunReady = false // true once we receive the TUN fd from Kotlin
+let consecutiveFailures = 0
+let pendingConnect = null // deferred connect after protect confirmation
+
+// Packet counters for diagnostics
+let stats = { tunRead: 0, tunWrite: 0, tunReadErr: 0, tunWriteErr: 0 }
 
 function sendToKotlin (msg) {
   ipc.write(Buffer.from(JSON.stringify(msg) + '\n'))
@@ -29,47 +36,77 @@ function sendToKotlin (msg) {
 
 function setupTun (fd) {
   const fs = require('bare-fs')
+  const buf = Buffer.alloc(2000) // MTU 1400 + headroom
 
-  tunReader = fs.createReadStream('', { fd, autoClose: false })
-  tunWriter = fs.createWriteStream('', {
-    fd,
-    autoClose: false,
-    fs: {
-      write: fs.write,
-      open: function (_p, _f, _m, cb) { cb(null, fd) },
-      close: function (_fd, cb) { cb(null) }
-    }
-  })
+  // Manual read loop — bare-fs.createReadStream uses uv_fs_read
+  // (designed for regular files) which doesn't poll device fds.
+  // TUN fds are blocking, so fs.read() blocks in libuv's thread
+  // pool until a packet arrives, then fires the callback.
+  // Position MUST be -1 (not null) to use read() instead of pread().
+  function readLoop () {
+    fs.read(fd, buf, 0, buf.length, -1, function (err, n) {
+      if (shuttingDown) return
+      if (err) {
+        stats.tunReadErr++
+        sendToKotlin({ type: 'error', message: 'TUN read: ' + err.message })
+        // Retry after brief delay
+        setTimeout(readLoop, 100)
+        return
+      }
+      if (n > 0) {
+        stats.tunRead++
+        const packet = Buffer.from(buf.slice(0, n)) // copy before reuse
+        if (activeConnection && !activeConnection.destroyed) {
+          activeConnection.write(encode(packet))
+        }
+      }
+      readLoop()
+    })
+  }
 
-  tunReader.on('data', function (packet) {
-    if (activeConnection && !activeConnection.destroyed) {
-      activeConnection.write(encode(packet))
+  // TUN write: each write() must be exactly one IP packet
+  tunWriter = {
+    write: function (packet) {
+      fs.write(fd, packet, 0, packet.length, null, function (err) {
+        if (err) {
+          stats.tunWriteErr++
+          if (!shuttingDown) {
+            sendToKotlin({ type: 'error', message: 'TUN write: ' + err.message })
+          }
+        }
+      })
     }
-  })
+  }
 
-  tunReader.on('error', function (err) {
-    if (!shuttingDown) {
-      sendToKotlin({ type: 'error', message: 'TUN read error: ' + err.message })
+  // Log packet stats every 5 seconds
+  setInterval(function () {
+    if (tunReady) {
+      sendToKotlin({ type: 'stats', tunRead: stats.tunRead, tunWrite: stats.tunWrite, tunReadErr: stats.tunReadErr, tunWriteErr: stats.tunWriteErr })
     }
-  })
+  }, 5000)
 
   tunReady = true
+  tunReader = { destroy: function () {} } // placeholder for shutdown
+  readLoop()
 }
 
-// Try to extract the native socket fd for VpnService.protect().
-// The fd path depends on the runtime — try several known locations.
-function getSocketFd (connection) {
-  const rawStream = connection.rawStream
-  if (rawStream && rawStream.socket) {
-    if (typeof rawStream.socket.fd === 'number') return rawStream.socket.fd
-    const handle = rawStream.socket._handle
-    if (handle && typeof handle.fd === 'number') return handle.fd
+// Get the DHT socket's fd and port for VpnService.protect().
+// Bare runtime's UDX doesn't expose .fd and SELinux blocks /proc scanning,
+// so we send the port to Kotlin which scans fds with Os.getsockname().
+function getProtectInfo () {
+  const sock = dht && dht.socket
+  if (!sock) return null
+
+  // Try direct .fd first (works on Node.js, not on Bare)
+  if (typeof sock.fd === 'number' && sock.fd >= 0) {
+    return { fd: sock.fd, port: sock._port || 0 }
   }
-  if (dht && dht.socket) {
-    if (typeof dht.socket.fd === 'number') return dht.socket.fd
-    const handle = dht.socket._handle
-    if (handle && typeof handle.fd === 'number') return handle.fd
+
+  // Send port — Kotlin will find the fd
+  if (typeof sock._port === 'number' && sock._port > 0) {
+    return { fd: -1, port: sock._port }
   }
+
   return null
 }
 
@@ -80,20 +117,24 @@ function connect (serverKey, connectOpts) {
 
   const decode = createDecoder(function (packet) {
     if (tunWriter && tunReady) {
+      stats.tunWrite++
       tunWriter.write(packet)
     }
   })
 
   connection.on('open', function () {
     retryDelay = INITIAL_RETRY_MS
+    consecutiveFailures = 0
+
+    // Always protect the DHT socket — fd may have changed after
+    // network switch or DHT restart
+    const info = getProtectInfo()
+    if (info) {
+      sendToKotlin({ type: 'protect', fd: info.fd, port: info.port })
+    }
 
     if (!tunReady) {
-      // First connection — ask Kotlin to protect the DHT socket,
-      // then establish the VPN and send us the TUN fd.
-      const fd = getSocketFd(connection)
-      if (fd !== null) {
-        sendToKotlin({ type: 'protect', fd: fd })
-      }
+      // First connection — tell Kotlin to establish the VPN
       sendToKotlin({ type: 'connected' })
     } else {
       // Reconnection — TUN already active, just resume forwarding
@@ -115,7 +156,16 @@ function connect (serverKey, connectOpts) {
     activeConnection = null
     if (shuttingDown) return
 
+    consecutiveFailures++
     sendToKotlin({ type: 'status', connected: false })
+
+    // After repeated failures the DHT socket is likely dead
+    // (NAT mapping expired, network changed). Restart DHT entirely
+    // and protect the new socket before reconnecting.
+    if (consecutiveFailures >= MAX_FAILURES_BEFORE_RESTART) {
+      restartDht(serverKey, connectOpts)
+      return
+    }
 
     const jitter = Math.floor(Math.random() * 1000)
     const delay = retryDelay + jitter
@@ -126,6 +176,36 @@ function connect (serverKey, connectOpts) {
 
     retryDelay = Math.min(retryDelay * 2, MAX_RETRY_MS)
   })
+}
+
+// Full DHT restart: the old UDP socket is likely dead (NAT expired,
+// network changed). Create a fresh DHT, protect its socket, then reconnect.
+function restartDht (serverKey, connectOpts) {
+  const oldDht = dht
+  dht = new HyperDHT()
+  try { oldDht.destroy() } catch (e) {}
+
+  retryDelay = INITIAL_RETRY_MS
+  consecutiveFailures = 0
+
+  // Protect the new socket before any DHT traffic flows.
+  const info = getProtectInfo()
+  if (info) {
+    sendToKotlin({ type: 'protect', fd: info.fd, port: info.port })
+  }
+
+  // Store the deferred connect — triggered by 'protected' confirmation
+  // from Kotlin (or fallback timeout if fd wasn't available)
+  pendingConnect = function () {
+    pendingConnect = null
+    connect(serverKey, connectOpts)
+  }
+
+  // Fallback: if Kotlin doesn't respond in 500ms, connect anyway
+  // (protect may have worked synchronously, or fd wasn't available)
+  setTimeout(function () {
+    if (pendingConnect) pendingConnect()
+  }, 500)
 }
 
 function shutdown () {
@@ -178,8 +258,16 @@ ipc.on('data', function (data) {
       sendToKotlin({ type: 'status', connected: true })
     }
 
+    if (msg.type === 'protected') {
+      // Kotlin confirmed protect() — proceed with deferred connect
+      if (pendingConnect) pendingConnect()
+    }
+
     if (msg.type === 'stop') {
       shutdown()
     }
   }
 })
+
+// Signal Kotlin that IPC is ready to receive messages
+sendToKotlin({ type: 'ready' })

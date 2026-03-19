@@ -1,12 +1,16 @@
 package com.nospoon.vpn
 
+import android.Manifest
 import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.net.VpnService
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -15,6 +19,7 @@ class MainActivity : Activity() {
 
     companion object {
         const val VPN_REQUEST_CODE = 1
+        const val NOTIFICATION_PERMISSION_CODE = 2
     }
 
     private lateinit var serverKeyInput: EditText
@@ -49,6 +54,12 @@ class MainActivity : Activity() {
         statusText = findViewById(R.id.statusText)
         connectButton = findViewById(R.id.connectButton)
 
+        // Request notification permission on Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_PERMISSION_CODE)
+        }
+
         connectButton.setOnClickListener {
             if (isConnected) {
                 disconnect()
@@ -76,6 +87,10 @@ class MainActivity : Activity() {
             IntentFilter(NospoonVpnService.ACTION_STATUS),
             RECEIVER_NOT_EXPORTED
         )
+        // Ask running service (if any) to re-broadcast its current status
+        startService(Intent(this, NospoonVpnService::class.java).apply {
+            action = NospoonVpnService.ACTION_QUERY
+        })
     }
 
     override fun onPause() {
@@ -90,15 +105,18 @@ class MainActivity : Activity() {
 
         // Request VPN permission (shows system dialog on first use)
         val intent = VpnService.prepare(this)
+        Log.d("NospoonVPN", "VpnService.prepare() returned: $intent")
         if (intent != null) {
+            Log.d("NospoonVPN", "Launching VPN consent dialog...")
             startActivityForResult(intent, VPN_REQUEST_CODE)
         } else {
-            // Permission already granted
+            Log.d("NospoonVPN", "VPN permission already granted, starting service")
             startVpnService()
         }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        Log.d("NospoonVPN", "onActivityResult: requestCode=$requestCode, resultCode=$resultCode")
         if (requestCode == VPN_REQUEST_CODE && resultCode == RESULT_OK) {
             startVpnService()
         } else {

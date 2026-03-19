@@ -23,36 +23,28 @@ Kotlin (VpnService)          Bare Worklet (JavaScript)
 
 ## Setup
 
-### 1. Install JS dependencies
+### 1. Enter development environment
 
 ```bash
 cd android
-npm install
+nix-shell
 ```
 
 ### 2. Download bare-kit prebuilt
 
 ```bash
-gh release download --repo holepunchto/bare-kit v1.15.2
-unzip android.zip -d app/libs/bare-kit
+# This is done automatically by build.sh, or manually:
+gh release download --repo holepunchto/bare-kit v1.15.2 --pattern "prebuilds.zip"
+unzip prebuilds.zip -d app/libs/bare-kit
+mkdir -p app/libs/bare-kit
+mv android/bare-kit/classes.jar app/libs/bare-kit/
+mv android/bare-kit/jni app/libs/bare-kit/
 ```
 
-### 3. Link native addons (udx-native, sodium-native)
+### 3. Build APK
 
 ```bash
-npm run link
-```
-
-### 4. Bundle JS worklet
-
-```bash
-npm run pack
-```
-
-### 5. Build APK
-
-```bash
-./gradlew assembleDebug
+./build.sh
 ```
 
 ## IPC Protocol

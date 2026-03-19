@@ -6,6 +6,7 @@ plugins {
 android {
     namespace = "com.nospoon.vpn"
     compileSdk = 35
+    buildToolsVersion = "35.0.0"
 
     defaultConfig {
         applicationId = "com.nospoon.vpn"
@@ -32,7 +33,7 @@ android {
 
     sourceSets {
         getByName("main") {
-            // Native addon .so files built by bare-link
+            // Native addon .so files from bare-link + bare-kit runtime
             jniLibs.srcDirs("src/main/addons", "libs/bare-kit/jni")
         }
     }
@@ -40,5 +41,5 @@ android {
 
 dependencies {
     // bare-kit Java classes (downloaded from GitHub releases)
-    api(fileTree(mapOf("dir" to "libs", "include" to listOf("bare-kit/classes.jar"))))
+    api(files("libs/bare-kit/classes.jar"))
 }
