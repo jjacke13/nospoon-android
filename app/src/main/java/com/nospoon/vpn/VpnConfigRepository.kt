@@ -26,7 +26,8 @@ class VpnConfigRepository(context: Context) {
                 name = obj.optString("name", ""),
                 serverKey = obj.getString("serverKey"),
                 seed = obj.optString("seed", "").ifEmpty { null },
-                ip = obj.optString("ip", "10.0.0.2/24")
+                ip = obj.optString("ip", "10.0.0.2/24"),
+                fullTunnel = obj.optBoolean("fullTunnel", true)
             ))
         }
         return configs
@@ -62,6 +63,7 @@ class VpnConfigRepository(context: Context) {
             obj.put("serverKey", config.serverKey)
             obj.put("seed", config.seed ?: "")
             obj.put("ip", config.ip)
+            obj.put("fullTunnel", config.fullTunnel)
             array.put(obj)
         }
         prefs.edit().putString(KEY_CONFIGS, array.toString()).apply()

@@ -32,6 +32,7 @@ class NospoonVpnService : VpnService() {
         const val EXTRA_SEED = "seed"
         const val EXTRA_IP = "ip"
         const val EXTRA_MTU = "mtu"
+        const val EXTRA_FULL_TUNNEL = "fullTunnel"
         const val NOTIFICATION_ID = 1
         const val CHANNEL_ID = "nospoon_vpn"
         const val ACTION_STATUS = "com.nospoon.vpn.STATUS"
@@ -60,6 +61,7 @@ class NospoonVpnService : VpnService() {
     private var pendingIp: String? = null
     private var pendingPrefix: Int = 24
     private var pendingMtu: Int = 1400
+    private var pendingFullTunnel: Boolean = true
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -68,7 +70,8 @@ class NospoonVpnService : VpnService() {
                 val seed = intent.getStringExtra(EXTRA_SEED)
                 val ip = intent.getStringExtra(EXTRA_IP) ?: "10.0.0.2"
                 val mtu = intent.getIntExtra(EXTRA_MTU, 1400)
-                startVpn(serverKey, seed, ip, mtu)
+                val fullTunnel = intent.getBooleanExtra(EXTRA_FULL_TUNNEL, true)
+                startVpn(serverKey, seed, ip, mtu, fullTunnel)
             }
             ACTION_STOP -> stopVpn()
             ACTION_QUERY -> broadcastStatus(currentStatusText, currentConnected)
@@ -161,7 +164,7 @@ class NospoonVpnService : VpnService() {
         nm.notify(NOTIFICATION_ID, notification)
     }
 
-    private fun startVpn(serverKey: String, seed: String?, ip: String, mtu: Int) {
+    private fun startVpn(serverKey: String, seed: String?, ip: String, mtu: Int, fullTunnel: Boolean = true) {
         // Tear down any existing connection before starting a new one
         if (worklet != null) {
             Log.i(TAG, "Cleaning up previous connection before restart")
@@ -189,6 +192,7 @@ class NospoonVpnService : VpnService() {
         pendingIp = parts[0]
         pendingPrefix = if (parts.size > 1) parts[1].toInt() else 24
         pendingMtu = mtu
+        pendingFullTunnel = fullTunnel
 
         // Start worklet — don't create IPC yet, native pipe isn't ready.
         // The worklet will send { type: "ready" } when IPC is initialized.
@@ -214,16 +218,24 @@ class NospoonVpnService : VpnService() {
             .setMtu(mtu)
             .addAddress(ip, prefix)
 
-        // Route all traffic through VPN
-        builder.addRoute("0.0.0.0", 0)
+        if (pendingFullTunnel) {
+            // Full tunnel: route all traffic through VPN
+            builder.addRoute("0.0.0.0", 0)
 
-        // Exclude our own app — our DHT socket must go direct (not through VPN).
-        // Other apps' traffic goes through VPN → TUN → worklet → DHT → server.
-        builder.addDisallowedApplication(packageName)
+            // Exclude our own app — our DHT socket must go direct (not through VPN).
+            builder.addDisallowedApplication(packageName)
 
-        // DNS servers
-        builder.addDnsServer("1.1.1.1")
-        builder.addDnsServer("8.8.8.8")
+            // DNS through the tunnel
+            builder.addDnsServer("1.1.1.1")
+            builder.addDnsServer("8.8.8.8")
+
+            Log.i(TAG, "Full tunnel: routing all traffic through VPN")
+        } else {
+            // Subnet only: route only VPN subnet traffic
+            builder.addRoute(subnetAddress(ip, prefix), prefix)
+
+            Log.i(TAG, "Subnet only: routing ${subnetAddress(ip, prefix)}/$prefix through VPN")
+        }
 
         vpnInterface = builder.establish()
         if (vpnInterface == null) {
@@ -381,6 +393,16 @@ class NospoonVpnService : VpnService() {
             putExtra(EXTRA_STATUS_TEXT, text)
             putExtra(EXTRA_CONNECTED, connected)
         })
+    }
+
+    // Compute the network address from a host IP and prefix length.
+    // e.g. subnetAddress("10.0.0.2", 24) → "10.0.0.0"
+    private fun subnetAddress(hostIp: String, prefix: Int): String {
+        val parts = hostIp.split(".").map { it.toInt() }
+        val ipInt = (parts[0] shl 24) or (parts[1] shl 16) or (parts[2] shl 8) or parts[3]
+        val mask = if (prefix == 0) 0 else (-1 shl (32 - prefix))
+        val network = ipInt and mask
+        return "${(network shr 24) and 0xFF}.${(network shr 16) and 0xFF}.${(network shr 8) and 0xFF}.${network and 0xFF}"
     }
 
     // Find a UDP socket's fd by its local port number.

@@ -15,6 +15,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.materialswitch.MaterialSwitch
 
 class ConfigEditorBottomSheet : BottomSheetDialogFragment() {
 
@@ -36,6 +37,7 @@ class ConfigEditorBottomSheet : BottomSheetDialogFragment() {
         private const val ARG_SERVER_KEY = "config_server_key"
         private const val ARG_SEED = "config_seed"
         private const val ARG_IP = "config_ip"
+        private const val ARG_FULL_TUNNEL = "config_full_tunnel"
 
         fun newInstance(config: VpnConfig): ConfigEditorBottomSheet {
             val fragment = ConfigEditorBottomSheet()
@@ -45,6 +47,7 @@ class ConfigEditorBottomSheet : BottomSheetDialogFragment() {
                 putString(ARG_SERVER_KEY, config.serverKey)
                 putString(ARG_SEED, config.seed)
                 putString(ARG_IP, config.ip)
+                putBoolean(ARG_FULL_TUNNEL, config.fullTunnel)
             }
             return fragment
         }
@@ -84,6 +87,7 @@ class ConfigEditorBottomSheet : BottomSheetDialogFragment() {
         val btnPasteSeed = view.findViewById<ImageButton>(R.id.btnPasteSeed)
         val btnScanKey = view.findViewById<ImageButton>(R.id.btnScanKey)
         val btnScanSeed = view.findViewById<ImageButton>(R.id.btnScanSeed)
+        val switchFullTunnel = view.findViewById<MaterialSwitch>(R.id.switchFullTunnel)
         val btnCancel = view.findViewById<MaterialButton>(R.id.btnCancel)
         val btnSave = view.findViewById<MaterialButton>(R.id.btnSave)
         val btnDelete = view.findViewById<MaterialButton>(R.id.btnDelete)
@@ -98,6 +102,7 @@ class ConfigEditorBottomSheet : BottomSheetDialogFragment() {
             inputServerKey.setText(arguments?.getString(ARG_SERVER_KEY, "") ?: "")
             inputSeed.setText(arguments?.getString(ARG_SEED, "") ?: "")
             inputIp.setText(arguments?.getString(ARG_IP, "10.0.0.2/24") ?: "10.0.0.2/24")
+            switchFullTunnel.isChecked = arguments?.getBoolean(ARG_FULL_TUNNEL, true) ?: true
             btnDelete.visibility = View.VISIBLE
         }
 
@@ -164,7 +169,8 @@ class ConfigEditorBottomSheet : BottomSheetDialogFragment() {
                 name = name,
                 serverKey = serverKey,
                 seed = seed,
-                ip = ip
+                ip = ip,
+                fullTunnel = switchFullTunnel.isChecked
             )
             listener?.onConfigSaved(config)
             dismiss()

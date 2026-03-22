@@ -267,6 +267,7 @@ class MainActivity : AppCompatActivity(),
             putExtra(NospoonVpnService.EXTRA_SERVER_KEY, config.serverKey)
             putExtra(NospoonVpnService.EXTRA_IP, config.ip)
             putExtra(NospoonVpnService.EXTRA_MTU, 1400)
+            putExtra(NospoonVpnService.EXTRA_FULL_TUNNEL, config.fullTunnel)
             config.seed?.let { putExtra(NospoonVpnService.EXTRA_SEED, it) }
         }
         startForegroundService(intent)

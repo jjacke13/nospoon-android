@@ -175,6 +175,25 @@
             android:maxLines="1" />
     </com.google.android.material.textfield.TextInputLayout>
 
+    <!-- Route all traffic toggle -->
+    <com.google.android.material.materialswitch.MaterialSwitch
+        android:id="@+id/switchFullTunnel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Route all traffic"
+        android:textColor="@color/md_theme_dark_onSurface"
+        android:textSize="15sp"
+        android:checked="true"
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="When enabled, all internet traffic goes through the VPN. When disabled, only traffic to the VPN subnet is routed."
+        android:textColor="@color/md_theme_dark_onSurfaceVariant"
+        android:textSize="12sp"
+        android:layout_marginBottom="24dp" />
+
     <!-- Buttons -->
     <LinearLayout
         android:layout_width="match_parent"
