@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@color/md_theme_dark_surface">
+
+    <!-- Drag handle -->
+    <View
+        android:layout_width="32dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="16dp"
+        android:background="@color/md_theme_dark_surfaceVariant" />
+
+    <!-- Title -->
+    <TextView
+        android:id="@+id/editorTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Add Configuration"
+        android:textColor="@color/md_theme_dark_onSurface"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Config name -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Name"
+        app:helperText="A friendly name for this configuration"
+        app:helperTextEnabled="true"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        android:layout_marginBottom="12dp">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/inputName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text"
+            android:textSize="15sp" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- Server public key -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Server public key"
+        android:textColor="@color/md_theme_dark_onSurfaceVariant"
+        android:textSize="13sp"
+        android:layout_marginBottom="4dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="64 hex characters"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/inputServerKey"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textNoSuggestions"
+                android:fontFamily="monospace"
+                android:textSize="14sp"
+                android:maxLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <ImageButton
+            android:id="@+id/btnScanKey"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_camera"
+            android:contentDescription="Scan server key"
+            app:tint="@color/md_theme_dark_primary" />
+
+        <ImageButton
+            android:id="@+id/btnPasteKey"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_edit"
+            android:contentDescription="Paste server key"
+            app:tint="@color/md_theme_dark_primary" />
+    </LinearLayout>
+
+    <!-- Client seed -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Client seed (optional)"
+        android:textColor="@color/md_theme_dark_onSurfaceVariant"
+        android:textSize="13sp"
+        android:layout_marginBottom="4dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="64 hex characters"
+            app:endIconMode="password_toggle"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/inputSeed"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPassword"
+                android:fontFamily="monospace"
+                android:textSize="14sp"
+                android:maxLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <ImageButton
+            android:id="@+id/btnScanSeed"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_camera"
+            android:contentDescription="Scan client seed"
+            app:tint="@color/md_theme_dark_primary" />
+
+        <ImageButton
+            android:id="@+id/btnPasteSeed"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_edit"
+            android:contentDescription="Paste client seed"
+            app:tint="@color/md_theme_dark_primary" />
+    </LinearLayout>
+
+    <!-- Client IP -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Client IP"
+        app:helperText="VPN address in CIDR notation"
+        app:helperTextEnabled="true"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        android:layout_marginBottom="24dp">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/inputIp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textNoSuggestions"
+            android:fontFamily="monospace"
+            android:text="10.0.0.2/24"
+            android:textSize="14sp"
+            android:maxLines="1" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnDelete"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Delete"
+            android:textColor="@color/status_error"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_marginEnd="8dp"
+            android:visibility="gone" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCancel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Cancel"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_marginEnd="8dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSave"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Save"
+            style="@style/Widget.Material3.Button" />
+    </LinearLayout>
+
+</LinearLayout>

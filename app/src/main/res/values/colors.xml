@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="md_theme_dark_primary">#9DCAFF</color>
+    <color name="md_theme_dark_onPrimary">#003258</color>
+    <color name="md_theme_dark_primaryContainer">#00497D</color>
+    <color name="md_theme_dark_onPrimaryContainer">#D1E4FF</color>
+
+    <color name="md_theme_dark_secondary">#BDC7DC</color>
+    <color name="md_theme_dark_onSecondary">#283141</color>
+    <color name="md_theme_dark_secondaryContainer">#3E4758</color>
+    <color name="md_theme_dark_onSecondaryContainer">#DAE2F9</color>
+
+    <color name="md_theme_dark_surface">#111318</color>
+    <color name="md_theme_dark_onSurface">#C4C6CF</color>
+    <color name="md_theme_dark_surfaceVariant">#43474E</color>
+    <color name="md_theme_dark_onSurfaceVariant">#C3C6CF</color>
+    <color name="md_theme_dark_outline">#8D9199</color>
+    <color name="md_theme_dark_surfaceContainer">#1D2024</color>
+    <color name="md_theme_dark_surfaceContainerHigh">#272A2F</color>
+
+    <!-- Status colors -->
+    <color name="status_connected">#4CAF50</color>
+    <color name="status_connecting">#FFC107</color>
+    <color name="status_disconnected">#757575</color>
+    <color name="status_error">#F44336</color>
+</resources>

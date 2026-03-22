@@ -1,64 +1,137 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
+<androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="24dp"
-    android:gravity="center_horizontal">
+    android:background="@color/md_theme_dark_surface"
+    android:fitsSystemWindows="true">
 
+    <!-- Connection status bar -->
+    <LinearLayout
+        android:id="@+id/statusBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="16dp"
+        android:background="@drawable/bg_status_bar"
+        android:layout_margin="12dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <View
+            android:id="@+id/statusIndicator"
+            android:layout_width="12dp"
+            android:layout_height="12dp"
+            android:background="@drawable/circle_status_disconnected" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:layout_marginStart="12dp">
+
+            <TextView
+                android:id="@+id/statusLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Not connected"
+                android:textColor="@color/md_theme_dark_onSurface"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/statusDetail"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tap a configuration to connect"
+                android:textColor="@color/md_theme_dark_outline"
+                android:textSize="13sp"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/connectButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Connect"
+            android:textColor="@color/md_theme_dark_primary"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- Config list header -->
     <TextView
+        android:id="@+id/configListHeader"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="nospoon"
-        android:textSize="28sp"
+        android:text="Configurations"
+        android:textColor="@color/md_theme_dark_onSurfaceVariant"
+        android:textSize="13sp"
         android:textStyle="bold"
-        android:layout_marginBottom="32dp" />
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="8dp"
+        app:layout_constraintTop_toBottomOf="@id/statusBar"
+        app:layout_constraintStart_toStartOf="parent" />
 
-    <EditText
-        android:id="@+id/serverKeyInput"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Server public key (64 hex chars)"
-        android:inputType="textNoSuggestions"
-        android:fontFamily="monospace"
-        android:textSize="14sp"
-        android:layout_marginBottom="16dp" />
-
-    <EditText
-        android:id="@+id/seedInput"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Client seed (optional, for auth mode)"
-        android:inputType="textNoSuggestions|textPassword"
-        android:fontFamily="monospace"
-        android:textSize="14sp"
-        android:layout_marginBottom="16dp" />
-
-    <EditText
-        android:id="@+id/ipInput"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Client IP (e.g. 10.0.0.2/24)"
-        android:text="10.0.0.2/24"
-        android:inputType="textNoSuggestions"
-        android:fontFamily="monospace"
-        android:textSize="14sp"
-        android:layout_marginBottom="24dp" />
-
-    <Button
-        android:id="@+id/connectButton"
-        android:layout_width="200dp"
-        android:layout_height="wrap_content"
-        android:text="Connect"
-        android:textSize="18sp"
-        android:layout_marginBottom="24dp" />
-
-    <TextView
-        android:id="@+id/statusText"
+    <!-- Empty state -->
+    <LinearLayout
+        android:id="@+id/emptyState"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Disconnected"
-        android:textSize="16sp"
-        android:textColor="#666666" />
-</LinearLayout>
+        android:orientation="vertical"
+        android:gravity="center"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/configListHeader"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="No configurations"
+            android:textColor="@color/md_theme_dark_onSurfaceVariant"
+            android:textSize="16sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tap + to add a VPN configuration"
+            android:textColor="@color/md_theme_dark_outline"
+            android:textSize="14sp"
+            android:layout_marginTop="4dp" />
+    </LinearLayout>
+
+    <!-- Config list -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/configList"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:clipToPadding="false"
+        android:paddingBottom="80dp"
+        app:layout_constraintTop_toBottomOf="@id/configListHeader"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- FAB -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabAdd"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:contentDescription="Add configuration"
+        android:src="@android:drawable/ic_input_add"
+        app:tint="@color/md_theme_dark_onPrimary"
+        app:backgroundTint="@color/md_theme_dark_primary"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

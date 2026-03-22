@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/cardView"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="12dp"
+    android:layout_marginVertical="4dp"
+    app:cardBackgroundColor="@color/md_theme_dark_surfaceContainerHigh"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp"
+    app:strokeWidth="0dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="16dp">
+
+        <!-- Status indicator dot -->
+        <View
+            android:id="@+id/configStatusDot"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:background="@drawable/circle_status_disconnected" />
+
+        <!-- Config info -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:layout_marginStart="14dp">
+
+            <TextView
+                android:id="@+id/configName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/md_theme_dark_onSurface"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:ellipsize="end"
+                android:maxLines="1" />
+
+            <TextView
+                android:id="@+id/configServerKey"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/md_theme_dark_outline"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1" />
+
+            <TextView
+                android:id="@+id/configIp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/md_theme_dark_outline"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:layout_marginTop="1dp" />
+        </LinearLayout>
+
+        <!-- Connection status text -->
+        <TextView
+            android:id="@+id/configConnectionStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/md_theme_dark_outline"
+            android:textSize="12sp"
+            android:layout_marginEnd="4dp" />
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>
