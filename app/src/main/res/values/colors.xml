@@ -18,6 +18,9 @@
     <color name="md_theme_dark_surfaceContainer">#1D2024</color>
     <color name="md_theme_dark_surfaceContainerHigh">#272A2F</color>
 
+    <!-- Launcher icon -->
+    <color name="ic_launcher_background">#0D0D0D</color>
+
     <!-- Status colors -->
     <color name="status_connected">#4CAF50</color>
     <color name="status_connecting">#FFC107</color>

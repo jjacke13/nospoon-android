@@ -94,8 +94,8 @@
             android:layout_height="48dp"
             android:layout_marginStart="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_menu_edit"
-            android:contentDescription="Paste server key"
+            android:src="@drawable/ic_paste"
+            android:contentDescription="Paste"
             app:tint="@color/md_theme_dark_primary" />
     </LinearLayout>
 
@@ -149,8 +149,8 @@
             android:layout_height="48dp"
             android:layout_marginStart="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_menu_edit"
-            android:contentDescription="Paste client seed"
+            android:src="@drawable/ic_paste"
+            android:contentDescription="Paste"
             app:tint="@color/md_theme_dark_primary" />
     </LinearLayout>
 

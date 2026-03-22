@@ -3,6 +3,7 @@ package com.nospoon.vpn
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 
@@ -14,6 +15,7 @@ class VpnConfigAdapter(
     interface OnConfigClickListener {
         fun onConfigClick(config: VpnConfig)
         fun onConfigLongClick(config: VpnConfig)
+        fun onConfigEdit(config: VpnConfig)
     }
 
     private var connectedConfigId: String? = null
@@ -25,6 +27,7 @@ class VpnConfigAdapter(
         val serverKey: TextView = view.findViewById(R.id.configServerKey)
         val ip: TextView = view.findViewById(R.id.configIp)
         val connectionStatusText: TextView = view.findViewById(R.id.configConnectionStatus)
+        val btnEdit: ImageButton = view.findViewById(R.id.btnEdit)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -66,6 +69,7 @@ class VpnConfigAdapter(
             listener.onConfigLongClick(config)
             true
         }
+        holder.btnEdit.setOnClickListener { listener.onConfigEdit(config) }
     }
 
     override fun getItemCount() = configs.size

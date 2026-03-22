@@ -148,6 +148,10 @@ class MainActivity : AppCompatActivity(),
         showConfigEditor(config)
     }
 
+    override fun onConfigEdit(config: VpnConfig) {
+        showConfigEditor(config)
+    }
+
     // ─── Config editor callbacks ─────────────────────────────────────
 
     override fun onConfigSaved(config: VpnConfig) {
