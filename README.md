@@ -18,34 +18,118 @@ Kotlin (VpnService)          Bare Worklet (JavaScript)
 
 - Android Studio (or Gradle CLI)
 - Node.js (for bare-link and bare-pack)
-- NDK r27+ (for native addons)
-- bare-kit prebuilt (download from GitHub releases)
+- GitHub CLI (`gh`) — for downloading bare-kit prebuilds
 
-## Setup
+NDK is **not** required — all native code uses prebuilt binaries.
 
-### 1. Enter development environment
+## Build
+
+### Option A: CLI with Nix (recommended)
 
 ```bash
 cd android
-nix-shell
+nix-shell          # provides Android SDK, JDK, Node.js, gh
+./build.sh         # does everything, outputs nospoon-debug.apk
 ```
 
-### 2. Download bare-kit prebuilt
+Or via the flake from the repo root:
 
 ```bash
-# This is done automatically by build.sh, or manually:
-gh release download --repo holepunchto/bare-kit v1.15.2 --pattern "prebuilds.zip"
-unzip prebuilds.zip -d app/libs/bare-kit
-mkdir -p app/libs/bare-kit
-mv android/bare-kit/classes.jar app/libs/bare-kit/
-mv android/bare-kit/jni app/libs/bare-kit/
+nix develop .#android
+cd android && ./build.sh
 ```
 
-### 3. Build APK
+### Option B: CLI without Nix
+
+Ensure `ANDROID_HOME`, `JAVA_HOME` are set and Node.js + `gh` are on PATH, then:
 
 ```bash
+cd android
 ./build.sh
 ```
+
+### Option C: Android Studio
+
+Android Studio only runs Gradle — it does **not** run the pre-build steps
+automatically. You must prepare the project before opening it:
+
+#### 1. Install JS dependencies
+
+```bash
+cd android
+npm install --legacy-peer-deps
+```
+
+#### 2. Download bare-kit (classes.jar + native runtime)
+
+Download `prebuilds.zip` from [bare-kit v1.15.2](https://github.com/holepunchto/bare-kit/releases/tag/v1.15.2)
+and extract the Android files:
+
+```bash
+mkdir -p app/libs/bare-kit/jni
+gh release download --repo holepunchto/bare-kit v1.15.2 --pattern "prebuilds.zip" --dir /tmp
+unzip -o /tmp/prebuilds.zip "android/bare-kit/jni/*" "android/bare-kit/classes.jar" -d /tmp/barekit
+mv /tmp/barekit/android/bare-kit/jni/* app/libs/bare-kit/jni/
+mv /tmp/barekit/android/bare-kit/classes.jar app/libs/bare-kit/
+rm -rf /tmp/barekit /tmp/prebuilds.zip
+```
+
+Result — these paths must exist:
+
+```
+app/libs/bare-kit/
+├── classes.jar
+└── jni/
+    ├── arm64-v8a/
+    │   ├── libbare-kit.so
+    │   └── libc++_shared.so
+    ├── armeabi-v7a/
+    │   └── ...
+    ├── x86/
+    │   └── ...
+    └── x86_64/
+        └── ...
+```
+
+#### 3. Link native addons
+
+```bash
+npx bare-link --preset android --out app/src/main/addons
+```
+
+Result — `.so` files for each architecture in:
+
+```
+app/src/main/addons/
+├── arm64-v8a/
+│   ├── libbare-buffer.3.6.0.so
+│   ├── libbare-fs.4.5.5.so
+│   ├── libsodium-native.5.1.0.so
+│   ├── libudx-native.1.19.2.so
+│   └── ...
+├── armeabi-v7a/
+│   └── ...
+├── x86/
+│   └── ...
+└── x86_64/
+    └── ...
+```
+
+#### 4. Bundle JS worklet
+
+```bash
+npx bare-pack --preset android --out app/src/main/assets/client.bundle worklet/client.js
+```
+
+Result — single file at:
+
+```
+app/src/main/assets/client.bundle
+```
+
+#### 5. Open in Android Studio
+
+Open the `android/` directory in Android Studio. Build and run normally.
 
 ## IPC Protocol
 
@@ -67,12 +151,3 @@ JSON messages delimited by newlines, over bare-kit IPC pipe.
 | `identity` | `publicKey` | Client public key (auth mode) |
 | `error` | `message` | Error occurred |
 | `stopped` | | Worklet has shut down |
-
-## Known Unknowns
-
-- **TUN fd on Bare**: `bare-fs` streams on a TUN fd may need a native
-  addon for packet-oriented I/O (TUN is not a regular file)
-- **DHT socket fds**: Getting the actual socket fd from udx-native for
-  `protect()` needs investigation
-- **Foreground service**: Android requires VPN services to run as
-  foreground services with a notification (not yet implemented)
