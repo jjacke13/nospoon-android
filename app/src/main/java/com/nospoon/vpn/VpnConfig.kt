@@ -8,7 +8,7 @@ data class VpnConfig(
     var serverKey: String = "",
     var seed: String? = null,
     var ip: String = "10.0.0.2/24",
-    var fullTunnel: Boolean = true
+    var fullTunnel: Boolean = false
 ) {
     fun displayName(): String {
         return name.ifEmpty {

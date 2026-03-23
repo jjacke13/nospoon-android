@@ -102,7 +102,7 @@ class ConfigEditorBottomSheet : BottomSheetDialogFragment() {
             inputServerKey.setText(arguments?.getString(ARG_SERVER_KEY, "") ?: "")
             inputSeed.setText(arguments?.getString(ARG_SEED, "") ?: "")
             inputIp.setText(arguments?.getString(ARG_IP, "10.0.0.2/24") ?: "10.0.0.2/24")
-            switchFullTunnel.isChecked = arguments?.getBoolean(ARG_FULL_TUNNEL, true) ?: true
+            switchFullTunnel.isChecked = arguments?.getBoolean(ARG_FULL_TUNNEL, false) ?: false
             btnDelete.visibility = View.VISIBLE
         }
 

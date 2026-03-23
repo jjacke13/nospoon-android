@@ -27,7 +27,7 @@ class VpnConfigRepository(context: Context) {
                 serverKey = obj.getString("serverKey"),
                 seed = obj.optString("seed", "").ifEmpty { null },
                 ip = obj.optString("ip", "10.0.0.2/24"),
-                fullTunnel = obj.optBoolean("fullTunnel", true)
+                fullTunnel = obj.optBoolean("fullTunnel", false)
             ))
         }
         return configs

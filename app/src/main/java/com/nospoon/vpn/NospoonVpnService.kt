@@ -70,7 +70,7 @@ class NospoonVpnService : VpnService() {
                 val seed = intent.getStringExtra(EXTRA_SEED)
                 val ip = intent.getStringExtra(EXTRA_IP) ?: "10.0.0.2"
                 val mtu = intent.getIntExtra(EXTRA_MTU, 1400)
-                val fullTunnel = intent.getBooleanExtra(EXTRA_FULL_TUNNEL, true)
+                val fullTunnel = intent.getBooleanExtra(EXTRA_FULL_TUNNEL, false)
                 startVpn(serverKey, seed, ip, mtu, fullTunnel)
             }
             ACTION_STOP -> stopVpn()
@@ -164,7 +164,7 @@ class NospoonVpnService : VpnService() {
         nm.notify(NOTIFICATION_ID, notification)
     }
 
-    private fun startVpn(serverKey: String, seed: String?, ip: String, mtu: Int, fullTunnel: Boolean = true) {
+    private fun startVpn(serverKey: String, seed: String?, ip: String, mtu: Int, fullTunnel: Boolean = false) {
         // Tear down any existing connection before starting a new one
         if (worklet != null) {
             Log.i(TAG, "Cleaning up previous connection before restart")
