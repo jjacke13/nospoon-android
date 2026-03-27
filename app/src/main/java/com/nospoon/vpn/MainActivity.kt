@@ -10,7 +10,6 @@ import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
@@ -21,13 +20,12 @@ import com.google.zxing.integration.android.IntentIntegrator
 
 class MainActivity : AppCompatActivity(),
     VpnConfigAdapter.OnConfigClickListener,
-    ConfigEditorBottomSheet.ConfigEditorListener,
-    ConfigEditorBottomSheet.ScanRequestListener {
+    ConfigEditorBottomSheet.ConfigEditorListener {
 
     companion object {
         const val VPN_REQUEST_CODE = 1
         const val NOTIFICATION_PERMISSION_CODE = 2
-        const val SCAN_REQUEST_CODE = 500
+        const val CAMERA_PERMISSION_CODE = 500
     }
 
     private lateinit var configList: RecyclerView
@@ -57,7 +55,6 @@ class MainActivity : AppCompatActivity(),
         override fun onReceive(context: Context, intent: Intent) {
             val text = intent.getStringExtra(NospoonVpnService.EXTRA_STATUS_TEXT) ?: return
             val connected = intent.getBooleanExtra(NospoonVpnService.EXTRA_CONNECTED, false)
-
             updateConnectionUI(text, connected)
         }
     }
@@ -68,7 +65,6 @@ class MainActivity : AppCompatActivity(),
 
         repository = VpnConfigRepository(this)
 
-        // Find views
         configList = findViewById(R.id.configList)
         statusLabel = findViewById(R.id.statusLabel)
         statusDetail = findViewById(R.id.statusDetail)
@@ -77,23 +73,16 @@ class MainActivity : AppCompatActivity(),
         emptyState = findViewById(R.id.emptyState)
         fabAdd = findViewById(R.id.fabAdd)
 
-        // Setup RecyclerView
         adapter = VpnConfigAdapter(repository.loadAll(), this)
         configList.layoutManager = LinearLayoutManager(this)
         configList.adapter = adapter
 
         updateEmptyState()
 
-        // FAB - add new config
-        fabAdd.setOnClickListener {
-            showConfigEditor(null)
-        }
+        fabAdd.setOnClickListener { showConfigEditor(null) }
 
-        // Connect button in status bar - disconnect
         connectButton.setOnClickListener {
-            if (isConnected) {
-                disconnect()
-            }
+            if (isConnected) disconnect()
         }
 
         // Request notification permission on Android 13+
@@ -115,7 +104,6 @@ class MainActivity : AppCompatActivity(),
             IntentFilter(NospoonVpnService.ACTION_STATUS),
             RECEIVER_NOT_EXPORTED
         )
-        // Ask running service (if any) to re-broadcast its current status
         startService(Intent(this, NospoonVpnService::class.java).apply {
             action = NospoonVpnService.ACTION_QUERY
         })
@@ -126,33 +114,25 @@ class MainActivity : AppCompatActivity(),
         super.onPause()
     }
 
-    // ─── Config list callbacks ───────────────────────────────────────
+    // --- Config list callbacks ---
 
     override fun onConfigClick(config: VpnConfig) {
         if (isConnected && activeConfigId == config.id) {
-            // Already connected with this config - disconnect
             disconnect()
         } else if (isConnected) {
-            // Connected with a different config - stop first, then start new
             disconnect()
             pendingConfig = config
-            // Small delay to let VPN tear down before reconnecting
             configList.postDelayed({ connectWithConfig(config) }, 500)
         } else {
-            // Not connected - connect
             connectWithConfig(config)
         }
-    }
-
-    override fun onConfigLongClick(config: VpnConfig) {
-        showConfigEditor(config)
     }
 
     override fun onConfigEdit(config: VpnConfig) {
         showConfigEditor(config)
     }
 
-    // ─── Config editor callbacks ─────────────────────────────────────
+    // --- Config editor callbacks ---
 
     override fun onConfigSaved(config: VpnConfig) {
         repository.save(config)
@@ -161,22 +141,16 @@ class MainActivity : AppCompatActivity(),
     }
 
     override fun onConfigDeleted(configId: String) {
-        if (activeConfigId == configId && isConnected) {
-            disconnect()
-        }
+        if (activeConfigId == configId && isConnected) disconnect()
         repository.delete(configId)
         adapter.updateData(repository.loadAll())
         updateEmptyState()
     }
 
-    // ─── Scan request callback (from bottom sheet) ────────────────────
-
     override fun onScanRequested(target: ConfigEditorBottomSheet.ScanTarget) {
         pendingScanTarget = target
-
-        // Check camera permission
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(Manifest.permission.CAMERA), SCAN_REQUEST_CODE)
+            requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_CODE)
             return
         }
         launchScanner()
@@ -198,7 +172,7 @@ class MainActivity : AppCompatActivity(),
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == SCAN_REQUEST_CODE) {
+        if (requestCode == CAMERA_PERMISSION_CODE) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 launchScanner()
             } else {
@@ -207,7 +181,7 @@ class MainActivity : AppCompatActivity(),
         }
     }
 
-    // ─── Config editor ───────────────────────────────────────────────
+    // --- Config editor ---
 
     private fun showConfigEditor(config: VpnConfig?) {
         val sheet = if (config != null) {
@@ -216,31 +190,23 @@ class MainActivity : AppCompatActivity(),
             ConfigEditorBottomSheet()
         }
         sheet.listener = this
-        sheet.setScanRequestListener(this)
         currentSheet = sheet
         sheet.show(supportFragmentManager, "config_editor")
     }
 
-    // ─── VPN connection ──────────────────────────────────────────────
+    // --- VPN connection ---
 
     private fun connectWithConfig(config: VpnConfig) {
         pendingConfig = config
-
-        // Request VPN permission (shows system dialog on first use)
         val intent = VpnService.prepare(this)
-        Log.d("NospoonVPN", "VpnService.prepare() returned: $intent")
         if (intent != null) {
-            Log.d("NospoonVPN", "Launching VPN consent dialog...")
             startActivityForResult(intent, VPN_REQUEST_CODE)
         } else {
-            Log.d("NospoonVPN", "VPN permission already granted, starting service")
             startVpnService()
         }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        Log.d("NospoonVPN", "onActivityResult: requestCode=$requestCode, resultCode=$resultCode")
-
         // Handle scan result
         val scanResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
         if (scanResult != null) {
@@ -268,11 +234,7 @@ class MainActivity : AppCompatActivity(),
 
         val intent = Intent(this, NospoonVpnService::class.java).apply {
             action = NospoonVpnService.ACTION_START
-            putExtra(NospoonVpnService.EXTRA_SERVER_KEY, config.serverKey)
-            putExtra(NospoonVpnService.EXTRA_IP, config.ip)
-            putExtra(NospoonVpnService.EXTRA_MTU, 1400)
-            putExtra(NospoonVpnService.EXTRA_FULL_TUNNEL, config.fullTunnel)
-            config.seed?.let { putExtra(NospoonVpnService.EXTRA_SEED, it) }
+            putExtra(NospoonVpnService.EXTRA_CONFIG_JSON, config.toJson().toString())
         }
         startForegroundService(intent)
 
@@ -281,11 +243,9 @@ class MainActivity : AppCompatActivity(),
     }
 
     private fun disconnect() {
-        val intent = Intent(this, NospoonVpnService::class.java).apply {
+        startService(Intent(this, NospoonVpnService::class.java).apply {
             action = NospoonVpnService.ACTION_STOP
-        }
-        startService(intent)
-
+        })
         isConnected = false
         activeConfigId = null
         pendingConfig = null
@@ -293,25 +253,22 @@ class MainActivity : AppCompatActivity(),
         adapter.setConnectionState(null, "disconnected")
     }
 
-    // ─── UI updates ──────────────────────────────────────────────────
+    // --- UI updates ---
 
     private fun updateConnectionUI(statusText: String, connected: Boolean) {
         isConnected = connected
-
         statusLabel.text = statusText
 
         when {
             connected -> {
                 statusIndicator.setBackgroundResource(R.drawable.circle_status_connected)
-                val configName = repository.getById(activeConfigId ?: "")?.displayName() ?: ""
-                statusDetail.text = configName
+                statusDetail.text = repository.getById(activeConfigId ?: "")?.displayName() ?: ""
                 connectButton.text = "Disconnect"
                 connectButton.visibility = View.VISIBLE
                 connectButton.setTextColor(getColor(R.color.status_error))
                 adapter.setConnectionState(activeConfigId, "connected")
             }
             activeConfigId != null -> {
-                // Connecting or reconnecting
                 statusIndicator.setBackgroundResource(R.drawable.circle_status_connecting)
                 statusDetail.text = "Establishing tunnel..."
                 connectButton.visibility = View.VISIBLE

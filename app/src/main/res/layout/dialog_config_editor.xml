@@ -27,6 +27,16 @@
         android:textStyle="bold"
         android:layout_marginBottom="24dp" />
 
+    <!-- Import full config from QR -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnScanConfig"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Import config from QR"
+        app:icon="@android:drawable/ic_menu_camera"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_marginBottom="16dp" />
+
     <!-- Config name -->
     <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"

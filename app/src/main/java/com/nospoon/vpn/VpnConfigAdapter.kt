@@ -14,7 +14,6 @@ class VpnConfigAdapter(
 
     interface OnConfigClickListener {
         fun onConfigClick(config: VpnConfig)
-        fun onConfigLongClick(config: VpnConfig)
         fun onConfigEdit(config: VpnConfig)
     }
 
@@ -66,7 +65,7 @@ class VpnConfigAdapter(
 
         holder.itemView.setOnClickListener { listener.onConfigClick(config) }
         holder.itemView.setOnLongClickListener {
-            listener.onConfigLongClick(config)
+            listener.onConfigEdit(config)
             true
         }
         holder.btnEdit.setOnClickListener { listener.onConfigEdit(config) }

@@ -19,16 +19,12 @@ const MAX_FAILURES_BEFORE_RESTART = 3
 
 let dht = null
 let activeConnection = null
-let tunReader = null
-let tunWriter = null
+let tunWrite = null
 let shuttingDown = false
 let retryDelay = INITIAL_RETRY_MS
 let tunReady = false // true once we receive the TUN fd from Kotlin
 let consecutiveFailures = 0
 let pendingConnect = null // deferred connect after protect confirmation
-
-// Packet counters for diagnostics
-let stats = { tunRead: 0, tunWrite: 0, tunReadErr: 0, tunWriteErr: 0 }
 
 function sendToKotlin (msg) {
   ipc.write(Buffer.from(JSON.stringify(msg) + '\n'))
@@ -47,14 +43,11 @@ function setupTun (fd) {
     fs.read(fd, buf, 0, buf.length, -1, function (err, n) {
       if (shuttingDown) return
       if (err) {
-        stats.tunReadErr++
         sendToKotlin({ type: 'error', message: 'TUN read: ' + err.message })
-        // Retry after brief delay
         setTimeout(readLoop, 100)
         return
       }
       if (n > 0) {
-        stats.tunRead++
         const packet = Buffer.from(buf.slice(0, n)) // copy before reuse
         if (activeConnection && !activeConnection.destroyed) {
           activeConnection.write(encode(packet))
@@ -65,28 +58,15 @@ function setupTun (fd) {
   }
 
   // TUN write: each write() must be exactly one IP packet
-  tunWriter = {
-    write: function (packet) {
-      fs.write(fd, packet, 0, packet.length, null, function (err) {
-        if (err) {
-          stats.tunWriteErr++
-          if (!shuttingDown) {
-            sendToKotlin({ type: 'error', message: 'TUN write: ' + err.message })
-          }
-        }
-      })
-    }
+  tunWrite = function (packet) {
+    fs.write(fd, packet, 0, packet.length, null, function (err) {
+      if (err && !shuttingDown) {
+        sendToKotlin({ type: 'error', message: 'TUN write: ' + err.message })
+      }
+    })
   }
 
-  // Log packet stats every 5 seconds
-  setInterval(function () {
-    if (tunReady) {
-      sendToKotlin({ type: 'stats', tunRead: stats.tunRead, tunWrite: stats.tunWrite, tunReadErr: stats.tunReadErr, tunWriteErr: stats.tunWriteErr })
-    }
-  }, 5000)
-
   tunReady = true
-  tunReader = { destroy: function () {} } // placeholder for shutdown
   readLoop()
 }
 
@@ -116,9 +96,8 @@ function connect (serverKey, connectOpts) {
   activeConnection = connection
 
   const decode = createDecoder(function (packet) {
-    if (tunWriter && tunReady) {
-      stats.tunWrite++
-      tunWriter.write(packet)
+    if (tunWrite && tunReady) {
+      tunWrite(packet)
     }
   })
 
@@ -213,8 +192,6 @@ function shutdown () {
   shuttingDown = true
 
   if (activeConnection) activeConnection.end()
-  if (tunReader) { try { tunReader.destroy() } catch (e) {} }
-  if (tunWriter) { try { tunWriter.destroy() } catch (e) {} }
   if (dht) dht.destroy()
 
   sendToKotlin({ type: 'stopped' })
@@ -240,30 +217,36 @@ ipc.on('data', function (data) {
 
     if (msg.type === 'start') {
       // Phase 1: create DHT and connect over regular internet (no VPN routes yet)
+      const config = msg.config || {}
+
+      // Validate server key before connecting
+      if (!config.server || typeof config.server !== 'string' || !/^[0-9a-fA-F]{64}$/.test(config.server)) {
+        sendToKotlin({ type: 'error', message: 'Invalid server key: must be 64 hex characters, got: ' + JSON.stringify(config.server) })
+        return
+      }
+
       dht = new HyperDHT()
 
       const connectOpts = {}
-      if (msg.seed) {
-        const seedBuf = Buffer.from(msg.seed, 'hex')
+      if (config.seed) {
+        if (typeof config.seed !== 'string' || !/^[0-9a-fA-F]{64}$/.test(config.seed)) {
+          sendToKotlin({ type: 'error', message: 'Invalid seed: must be 64 hex characters' })
+          return
+        }
+        const seedBuf = Buffer.from(config.seed, 'hex')
         connectOpts.keyPair = HyperDHT.keyPair(seedBuf)
         sendToKotlin({ type: 'identity', publicKey: connectOpts.keyPair.publicKey.toString('hex') })
       }
 
-      connect(msg.serverKey, connectOpts)
-    }
-
-    if (msg.type === 'tun') {
+      connect(config.server, connectOpts)
+    } else if (msg.type === 'tun') {
       // Phase 2: VPN is established, start packet forwarding
       setupTun(msg.tunFd)
       sendToKotlin({ type: 'status', connected: true })
-    }
-
-    if (msg.type === 'protected') {
+    } else if (msg.type === 'protected') {
       // Kotlin confirmed protect() — proceed with deferred connect
       if (pendingConnect) pendingConnect()
-    }
-
-    if (msg.type === 'stop') {
+    } else if (msg.type === 'stop') {
       shutdown()
     }
   }
