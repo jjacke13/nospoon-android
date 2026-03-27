@@ -9,10 +9,24 @@ Kotlin (VpnService)          Bare Worklet (JavaScript)
  - Creates TUN via Builder    - Runs HyperDHT client
  - Manages VPN permission     - Reads/writes TUN fd
  - protect() for DHT sockets  - Handles reconnection
- - UI (connect/disconnect)    - Framing + routing (pure JS)
+ - UI (config list, editor)   - Framing (pure JS)
         |                              |
         +---- IPC (JSON over pipe) ----+
 ```
+
+### Two-Phase Startup
+
+The tunnel uses a two-phase startup to avoid a routing deadlock:
+
+1. **Phase 1 (DHT connect):** Worklet creates a HyperDHT instance and connects
+   to the server over the regular internet (no VPN routes yet). The DHT socket
+   is protected via `VpnService.protect()` so it bypasses VPN routing.
+
+2. **Phase 2 (TUN establish):** Once the DHT connection is open, Kotlin calls
+   `VpnService.Builder.establish()` to create the TUN interface and sends the
+   fd to the worklet. Packet forwarding begins.
+
+This ensures the DHT can always reach the internet, even in full-tunnel mode.
 
 ## Prerequisites
 
@@ -97,34 +111,10 @@ app/libs/bare-kit/
 npx bare-link --preset android --out app/src/main/addons
 ```
 
-Result — `.so` files for each architecture in:
-
-```
-app/src/main/addons/
-├── arm64-v8a/
-│   ├── libbare-buffer.3.6.0.so
-│   ├── libbare-fs.4.5.5.so
-│   ├── libsodium-native.5.1.0.so
-│   ├── libudx-native.1.19.2.so
-│   └── ...
-├── armeabi-v7a/
-│   └── ...
-├── x86/
-│   └── ...
-└── x86_64/
-    └── ...
-```
-
 #### 4. Bundle JS worklet
 
 ```bash
 npx bare-pack --preset android --out app/src/main/assets/client.bundle worklet/client.js
-```
-
-Result — single file at:
-
-```
-app/src/main/assets/client.bundle
 ```
 
 #### 5. Open in Android Studio
@@ -139,15 +129,48 @@ JSON messages delimited by newlines, over bare-kit IPC pipe.
 
 | type | fields | description |
 |------|--------|-------------|
-| `start` | `tunFd`, `serverKey`, `ip`, `seed?` | Start VPN connection |
+| `start` | `config` (full config JSON object) | Start DHT connection (phase 1) |
+| `tun` | `tunFd` | TUN fd ready, start packet forwarding (phase 2) |
+| `protected` | `fd`, `ok` | Confirm socket protection result |
 | `stop` | | Disconnect and shut down |
 
 ### Worklet -> Kotlin
 
 | type | fields | description |
 |------|--------|-------------|
+| `ready` | | IPC initialized, ready to receive `start` |
+| `connected` | | DHT connected, request VPN establishment |
 | `status` | `connected` | Connection state changed |
-| `protect` | `fd` | Request socket protection from VPN |
+| `protect` | `fd`, `port` | Request socket protection from VPN |
 | `identity` | `publicKey` | Client public key (auth mode) |
 | `error` | `message` | Error occurred |
 | `stopped` | | Worklet has shut down |
+
+### Config Object
+
+The `start` message includes a full config object matching the desktop schema:
+
+```json
+{
+  "mode": "client",
+  "server": "<64-hex-chars>",
+  "ip": "10.0.0.2/24",
+  "seed": "<64-hex-chars>",
+  "mtu": 1400,
+  "fullTunnel": false
+}
+```
+
+The worklet reads `server` and `seed` from the config. Kotlin reads `ip`, `mtu`,
+and `fullTunnel` when establishing the VPN interface.
+
+## QR Code Import
+
+The app can scan QR codes containing config JSON to populate all fields at once.
+Generate a QR from a config file:
+
+```bash
+qrencode -t ANSIUTF8 < config.json
+```
+
+Note: strip JSONC comments before encoding (QR scanner expects valid JSON).
