@@ -82,7 +82,7 @@ class MainActivity : AppCompatActivity(),
         fabAdd.setOnClickListener { showConfigEditor(null) }
 
         connectButton.setOnClickListener {
-            if (isConnected) disconnect()
+            disconnect()
         }
 
         // Request notification permission on Android 13+
@@ -258,6 +258,11 @@ class MainActivity : AppCompatActivity(),
     private fun updateConnectionUI(statusText: String, connected: Boolean) {
         isConnected = connected
         statusLabel.text = statusText
+
+        // Service reported disconnected — clear active config so UI resets fully
+        if (!connected && statusText == "Disconnected") {
+            activeConfigId = null
+        }
 
         when {
             connected -> {

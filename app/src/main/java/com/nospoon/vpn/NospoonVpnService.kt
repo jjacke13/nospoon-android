@@ -51,8 +51,15 @@ class NospoonVpnService : VpnService() {
     // Socket fd to protect — must be re-protected after VPN establish()
     private var protectedFd: Int = -1
 
+    // Cleanup timeout — cancelled if worklet responds with "stopped" in time
+    private var cleanupRunnable: Runnable? = null
+
     // Config stored for deferred startup (sent when worklet reports ready)
     private var pendingConfig: JSONObject? = null
+
+    // Dup'd TUN fd sent to the worklet — must be closed explicitly on cleanup,
+    // otherwise the TUN device stays alive even after vpnInterface.close()
+    private var tunFdForWorklet: Int = -1
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -66,11 +73,18 @@ class NospoonVpnService : VpnService() {
                 }
                 if (!config.has("server")) return START_NOT_STICKY
                 startVpn(config)
+                return START_STICKY
             }
-            ACTION_STOP -> stopVpn()
-            ACTION_QUERY -> broadcastStatus(currentStatusText, currentConnected)
+            ACTION_STOP -> {
+                stopVpn()
+                return START_NOT_STICKY
+            }
+            ACTION_QUERY -> {
+                broadcastStatus(currentStatusText, currentConnected)
+                return START_NOT_STICKY
+            }
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun buildNotification(text: String): Notification {
@@ -198,7 +212,8 @@ class NospoonVpnService : VpnService() {
         fdField.isAccessible = true
         val origFdNum = fdField.getInt(origFd)
         val tunFd = try {
-            Os.open("/proc/self/fd/$origFdNum", OsConstants.O_RDWR, 0)
+            val openedFd = Os.open("/proc/self/fd/$origFdNum", OsConstants.O_RDWR, 0)
+            fdField.getInt(openedFd)
         } catch (e: ErrnoException) {
             Log.w(TAG, "/proc/self/fd open failed, falling back to dup: ${e.message}")
             val dupPfd = vpnInterface!!.dup()
@@ -210,6 +225,7 @@ class NospoonVpnService : VpnService() {
             fd
         }
 
+        tunFdForWorklet = tunFd
         pendingConfig = null
         sendToWorklet(JSONObject().apply {
             put("type", "tun")
@@ -345,12 +361,29 @@ class NospoonVpnService : VpnService() {
 
     private fun stopVpn() {
         sendToWorklet(JSONObject().apply { put("type", "stop") })
+        // Force cleanup after 2s if the worklet doesn't respond with "stopped"
+        val fallback = Runnable { cleanup() }
+        cleanupRunnable = fallback
+        handler.postDelayed(fallback, 2000)
     }
 
     private fun cleanup() {
+        // Idempotent — safe to call multiple times (timeout + worklet response)
+        cleanupRunnable?.let { handler.removeCallbacks(it) }
+        cleanupRunnable = null
         worklet?.terminate()
         worklet = null
         ipc = null
+        // Close the dup'd TUN fd before the VPN interface — the TUN device
+        // stays alive as long as ANY fd referencing it is open
+        if (tunFdForWorklet >= 0) {
+            try { Os.close(FileDescriptor().also {
+                val f = FileDescriptor::class.java.getDeclaredField("descriptor")
+                f.isAccessible = true
+                f.setInt(it, tunFdForWorklet)
+            }) } catch (_: ErrnoException) {}
+            tunFdForWorklet = -1
+        }
         vpnInterface?.close()
         vpnInterface = null
         protectedFd = -1
@@ -362,12 +395,15 @@ class NospoonVpnService : VpnService() {
     }
 
     override fun onDestroy() {
-        stopVpn()
+        cleanup()
         super.onDestroy()
     }
 
     override fun onRevoke() {
-        stopVpn()
+        // System already revoked the VPN — clean up immediately,
+        // don't ask the worklet gracefully (it would try to reconnect)
+        broadcastStatus("Disconnected", false)
+        cleanup()
         super.onRevoke()
     }
 }
