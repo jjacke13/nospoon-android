@@ -15,12 +15,11 @@ import android.system.Os
 import android.system.OsConstants
 import android.util.Log
 import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.File
 import java.io.FileDescriptor
-import java.net.InetSocketAddress
-import to.holepunch.bare.kit.IPC
-import to.holepunch.bare.kit.Worklet
-import java.nio.ByteBuffer
-import java.nio.charset.StandardCharsets
+import java.io.FileInputStream
+import java.io.InputStreamReader
 
 class NospoonVpnService : VpnService() {
 
@@ -39,27 +38,15 @@ class NospoonVpnService : VpnService() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var vpnInterface: ParcelFileDescriptor? = null
-    private var worklet: Worklet? = null
-    private var ipc: IPC? = null
-    private var ipcBuffer = StringBuilder()
+    private var nospoonPid: Int = -1
+    private var ipcSocketFd: Int = -1
+    private var ipcReader: Thread? = null
     private var wakeLock: PowerManager.WakeLock? = null
-
-    // Tracked state so Activity can query on resume
-    private var currentStatusText = "Disconnected"
-    private var currentConnected = false
-
-    // Socket fd to protect — must be re-protected after VPN establish()
-    private var protectedFd: Int = -1
-
-    // Cleanup timeout — cancelled if worklet responds with "stopped" in time
-    private var cleanupRunnable: Runnable? = null
-
-    // Config stored for deferred startup (sent when worklet reports ready)
     private var pendingConfig: JSONObject? = null
 
-    // Dup'd TUN fd sent to the worklet — must be closed explicitly on cleanup,
-    // otherwise the TUN device stays alive even after vpnInterface.close()
-    private var tunFdForWorklet: Int = -1
+    private var currentStatusText = "Disconnected"
+    private var currentConnected = false
+    private var tunFdForBinary: Int = -1
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -127,20 +114,14 @@ class NospoonVpnService : VpnService() {
     }
 
     private fun startVpn(config: JSONObject) {
-        // Tear down any existing connection before starting a new one
-        if (worklet != null) {
+        if (nospoonPid > 0) {
             Log.d(TAG, "Cleaning up previous connection before restart")
-            worklet?.terminate()
-            worklet = null
-            ipc = null
-            vpnInterface?.close()
-            vpnInterface = null
-            ipcBuffer = StringBuilder()
+            cleanup()
         }
 
+        pendingConfig = config
         startForegroundNotification()
 
-        // Keep CPU awake so DHT keepalives aren't killed by Doze
         if (wakeLock == null) {
             val pm = getSystemService(PowerManager::class.java)
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "nospoon:vpn").apply {
@@ -148,25 +129,93 @@ class NospoonVpnService : VpnService() {
             }
         }
 
-        // Store config — sent to worklet when it reports "ready"
-        pendingConfig = config
+        // Write config to temp file
+        val configFile = File(cacheDir, "nospoon-config.jsonc")
+        configFile.writeText(config.toString())
 
-        // Start worklet — don't create IPC yet, native pipe isn't ready.
-        // The worklet will send { type: "ready" } when IPC is initialized.
-        worklet = Worklet(null)
+        val binaryPath = applicationInfo.nativeLibraryDir + "/libnospoon.so"
+        if (!File(binaryPath).exists()) {
+            Log.e(TAG, "nospoon binary not found at $binaryPath")
+            broadcastStatus("Error: binary not found", false)
+            cleanup()
+            return
+        }
 
-        val bundle = assets.open("client.bundle")
-        worklet!!.start("/client.bundle", bundle, null)
+        // Phase 1: Fork binary with --fd-socket (NO VPN yet).
+        // Binary connects DHT over regular internet — works on same LAN.
+        // The socketpair is used for IPC: binary sends "CONNECTED",
+        // we send back the TUN fd via SCM_RIGHTS.
+        val result = NativeHelper.exec(arrayOf(
+            binaryPath, "up", "--fd-socket=CHILD_SOCK", configFile.absolutePath
+        ))
 
-        // IPC must be created AFTER worklet.start() returns
-        ipc = IPC(worklet)
-        readNextIpcMessage()
+        if (result == null || result[0] <= 0) {
+            Log.e(TAG, "Failed to fork nospoon binary")
+            broadcastStatus("Error: fork failed", false)
+            cleanup()
+            return
+        }
+
+        nospoonPid = result[0]
+        ipcSocketFd = result[1]
+        val childSockFd = result[2]
+
+        // Fix up the --fd-socket argument with the actual child fd number.
+        // The child already has it inherited; we need to tell it which fd.
+        // Actually, we need to pass the fd number BEFORE exec...
+        // Let's use a different approach: pass it as the last arg.
+
+        Log.i(TAG, "nospoon child pid: $nospoonPid, ipc socket: $ipcSocketFd, child sock: $childSockFd")
+        broadcastStatus("Connecting...", false)
+
+        // Read IPC messages from child on a background thread
+        ipcReader = Thread {
+            val fdField = FileDescriptor::class.java.getDeclaredField("descriptor")
+            fdField.isAccessible = true
+            try {
+                val fis = FileInputStream(FileDescriptor().also {
+                    fdField.setInt(it, ipcSocketFd)
+                })
+                val reader = BufferedReader(InputStreamReader(fis))
+                var line: String?
+                while (reader.readLine().also { line = it } != null) {
+                    val l = line!!.trim()
+                    if (l.isEmpty()) continue
+                    Log.d(TAG, "ipc: $l")
+
+                    if (l == "CONNECTED") {
+                        // Phase 2: DHT connected — establish VPN and send TUN fd
+                        handler.post { establishAndSendTunFd(config) }
+                    } else if (l == "STATUS:connected") {
+                        handler.post {
+                            updateNotification("Connected")
+                            broadcastStatus("Connected", true)
+                        }
+                    } else if (l == "STATUS:reconnecting") {
+                        handler.post {
+                            updateNotification("Reconnecting...")
+                            broadcastStatus("Reconnecting...", false)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.d(TAG, "ipc reader ended: ${e.message}")
+            }
+
+            handler.post {
+                Log.i(TAG, "nospoon process exited")
+                broadcastStatus("Disconnected", false)
+                cleanup()
+            }
+        }.apply {
+            isDaemon = true
+            start()
+        }
     }
 
-    // Phase 2: Called when worklet reports DHT is connected.
-    // The DHT socket is already protected, so it bypasses VPN routing.
-    private fun establishVpn() {
-        val config = pendingConfig ?: return
+    // Phase 2: Called when binary reports DHT is connected.
+    // NOW establish VPN and send TUN fd to binary via SCM_RIGHTS.
+    private fun establishAndSendTunFd(config: JSONObject) {
         val ipFull = config.optString("ip", "10.0.0.2/24")
         val parts = ipFull.split("/")
         val ip = parts[0]
@@ -193,127 +242,38 @@ class NospoonVpnService : VpnService() {
         vpnInterface = builder.establish()
         if (vpnInterface == null) {
             Log.e(TAG, "Failed to establish VPN interface")
-            stopSelf()
+            broadcastStatus("Error: VPN permission denied", false)
+            cleanup()
             return
         }
 
-        // Re-protect the DHT socket NOW that VPN routes are active.
-        // protect() before establish() may not survive VPN activation.
-        if (protectedFd >= 0) {
-            protect(protectedFd)
-        }
-
-        // Open a fresh file description via /proc so the new fd has its
-        // own O_NONBLOCK flag (default: blocking). Android creates the TUN
-        // with O_NONBLOCK, and dup() shares the same flag — but libuv's
-        // uv_fs_read needs a blocking fd.
-        val origFd = vpnInterface!!.fileDescriptor
+        // Get a blocking TUN fd
         val fdField = FileDescriptor::class.java.getDeclaredField("descriptor")
         fdField.isAccessible = true
-        val origFdNum = fdField.getInt(origFd)
-        val tunFd = try {
-            val openedFd = Os.open("/proc/self/fd/$origFdNum", OsConstants.O_RDWR, 0)
-            fdField.getInt(openedFd)
-        } catch (e: ErrnoException) {
-            Log.w(TAG, "/proc/self/fd open failed, falling back to dup: ${e.message}")
-            val dupPfd = vpnInterface!!.dup()
-            val fd = dupPfd.detachFd()
-            val tmpFd = FileDescriptor()
-            fdField.setInt(tmpFd, fd)
-            val flags = Os.fcntlInt(tmpFd, OsConstants.F_GETFL, 0)
-            Os.fcntlInt(tmpFd, OsConstants.F_SETFL, flags and OsConstants.O_NONBLOCK.inv())
-            fd
+
+        val dupPfd = vpnInterface!!.dup()
+        val tunFd = dupPfd.detachFd()
+        val tunFdObj = FileDescriptor()
+        fdField.setInt(tunFdObj, tunFd)
+
+        val fileFlags = Os.fcntlInt(tunFdObj, OsConstants.F_GETFL, 0)
+        Os.fcntlInt(tunFdObj, OsConstants.F_SETFL, fileFlags and OsConstants.O_NONBLOCK.inv())
+
+        tunFdForBinary = tunFd
+        Log.d(TAG, "Sending TUN fd $tunFd to child via SCM_RIGHTS")
+
+        // Send TUN fd to child via the socketpair
+        val ok = NativeHelper.sendFd(ipcSocketFd, tunFd)
+        if (!ok) {
+            Log.e(TAG, "Failed to send TUN fd to child")
+            broadcastStatus("Error: fd send failed", false)
+            cleanup()
+            return
         }
 
-        tunFdForWorklet = tunFd
-        pendingConfig = null
-        sendToWorklet(JSONObject().apply {
-            put("type", "tun")
-            put("tunFd", tunFd)
-        })
-    }
-
-    // Continuous IPC listener — re-registers after each read so we
-    // receive all messages, not just the first one.
-    private fun readNextIpcMessage() {
-        ipc?.read { data, _ ->
-            if (data != null) {
-                val text = StandardCharsets.UTF_8.decode(data).toString()
-                ipcBuffer.append(text)
-
-                val content = ipcBuffer.toString()
-                val lines = content.split("\n")
-                ipcBuffer.clear()
-                ipcBuffer.append(lines.last()) // keep incomplete line
-
-                for (i in 0 until lines.size - 1) {
-                    val line = lines[i].trim()
-                    if (line.isEmpty()) continue
-
-                    try {
-                        val msg = JSONObject(line)
-                        handleWorkletMessage(msg)
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to parse IPC message: $line")
-                    }
-                }
-            }
-            // Post to next event loop tick to avoid stack overflow —
-            // IPC.read() calls the callback synchronously when data
-            // is already available, which would recurse infinitely.
-            handler.post { readNextIpcMessage() }
-        }
-    }
-
-    private fun handleWorkletMessage(msg: JSONObject) {
-        when (msg.getString("type")) {
-            "ready" -> {
-                val config = pendingConfig ?: return
-                sendToWorklet(JSONObject().apply {
-                    put("type", "start")
-                    put("config", config)
-                })
-            }
-            "protect" -> {
-                // Exempt DHT socket from VPN routing.
-                // Store the fd — it will be re-protected after establish()
-                // since protect() only takes effect with an active VPN.
-                var fd = msg.getInt("fd")
-                if (fd < 0 && msg.has("port")) {
-                    fd = findUdpFdByPort(msg.getInt("port"))
-                }
-                protectedFd = fd
-                val ok = if (fd >= 0) protect(fd) else false
-                sendToWorklet(JSONObject().apply {
-                    put("type", "protected")
-                    put("fd", fd)
-                    put("ok", ok)
-                })
-            }
-            "connected" -> {
-                Log.i(TAG, "DHT connected, establishing VPN...")
-                updateNotification("Connected")
-                broadcastStatus("Connected", true)
-                establishVpn()
-            }
-            "status" -> {
-                val connected = msg.getBoolean("connected")
-                val text = if (connected) "Connected" else "Reconnecting..."
-                updateNotification(text)
-                broadcastStatus(text, connected)
-            }
-            "identity" -> {
-                Log.d(TAG, "Client public key: ${msg.getString("publicKey")}")
-            }
-            "error" -> {
-                Log.e(TAG, "Worklet error: ${msg.getString("message")}")
-                broadcastStatus("Error: ${msg.getString("message")}", false)
-            }
-            "stopped" -> {
-                broadcastStatus("Disconnected", false)
-                cleanup()
-            }
-        }
+        Log.i(TAG, "VPN established, TUN fd sent to child")
+        updateNotification("Connected")
+        broadcastStatus("Connected", true)
     }
 
     private fun broadcastStatus(text: String, connected: Boolean) {
@@ -334,59 +294,37 @@ class NospoonVpnService : VpnService() {
         return "${(network shr 24) and 0xFF}.${(network shr 16) and 0xFF}.${(network shr 8) and 0xFF}.${network and 0xFF}"
     }
 
-    private fun findUdpFdByPort(port: Int): Int {
-        val fdField = FileDescriptor::class.java.getDeclaredField("descriptor")
-        fdField.isAccessible = true
-        for (candidate in 3..1023) {
-            try {
-                val fd = FileDescriptor()
-                fdField.setInt(fd, candidate)
-                val addr = Os.getsockname(fd)
-                if (addr is InetSocketAddress && addr.port == port) {
-                    return candidate
-                }
-            } catch (_: ErrnoException) {}
-        }
-        Log.e(TAG, "Could not find UDP socket for port $port")
-        return -1
-    }
-
-    private fun sendToWorklet(msg: JSONObject) {
-        val bytes = (msg.toString() + "\n").toByteArray(StandardCharsets.UTF_8)
-        val buf = ByteBuffer.allocateDirect(bytes.size)
-        buf.put(bytes)
-        buf.flip()
-        ipc?.write(buf) { _ -> }
-    }
-
     private fun stopVpn() {
-        sendToWorklet(JSONObject().apply { put("type", "stop") })
-        // Force cleanup after 2s if the worklet doesn't respond with "stopped"
-        val fallback = Runnable { cleanup() }
-        cleanupRunnable = fallback
-        handler.postDelayed(fallback, 2000)
+        if (nospoonPid > 0) NativeHelper.kill(nospoonPid)
+        handler.postDelayed({ cleanup() }, 2000)
     }
 
     private fun cleanup() {
-        // Idempotent — safe to call multiple times (timeout + worklet response)
-        cleanupRunnable?.let { handler.removeCallbacks(it) }
-        cleanupRunnable = null
-        worklet?.terminate()
-        worklet = null
-        ipc = null
-        // Close the dup'd TUN fd before the VPN interface — the TUN device
-        // stays alive as long as ANY fd referencing it is open
-        if (tunFdForWorklet >= 0) {
+        if (nospoonPid > 0) {
+            NativeHelper.kill(nospoonPid)
+            nospoonPid = -1
+        }
+
+        if (ipcSocketFd >= 0) {
             try { Os.close(FileDescriptor().also {
                 val f = FileDescriptor::class.java.getDeclaredField("descriptor")
                 f.isAccessible = true
-                f.setInt(it, tunFdForWorklet)
+                f.setInt(it, ipcSocketFd)
             }) } catch (_: ErrnoException) {}
-            tunFdForWorklet = -1
+            ipcSocketFd = -1
+        }
+        ipcReader = null
+
+        if (tunFdForBinary >= 0) {
+            try { Os.close(FileDescriptor().also {
+                val f = FileDescriptor::class.java.getDeclaredField("descriptor")
+                f.isAccessible = true
+                f.setInt(it, tunFdForBinary)
+            }) } catch (_: ErrnoException) {}
+            tunFdForBinary = -1
         }
         vpnInterface?.close()
         vpnInterface = null
-        protectedFd = -1
         pendingConfig = null
         if (wakeLock?.isHeld == true) wakeLock?.release()
         wakeLock = null
@@ -400,8 +338,6 @@ class NospoonVpnService : VpnService() {
     }
 
     override fun onRevoke() {
-        // System already revoked the VPN — clean up immediately,
-        // don't ask the worklet gracefully (it would try to reconnect)
         broadcastStatus("Disconnected", false)
         cleanup()
         super.onRevoke()

@@ -28,15 +28,6 @@ check_env() {
         exit 1
     fi
 
-    # Set NDK_HOME if not set
-    if [ -z "$ANDROID_NDK_HOME" ]; then
-        ANDROID_NDK_HOME=$(ls -d $ANDROID_HOME/ndk/*/ 2>/dev/null | head -1)
-        if [ -n "$ANDROID_NDK_HOME" ]; then
-            export ANDROID_NDK_HOME
-            log_info "Detected ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-        fi
-    fi
-
     # Set JAVA_HOME if not set
     if [ -z "$JAVA_HOME" ]; then
         JAVA_BIN=$(which java 2>/dev/null || echo "")
@@ -51,83 +42,67 @@ check_env() {
     log_info "  ANDROID_HOME=$ANDROID_HOME"
 }
 
-# Install JS dependencies
-install_deps() {
-    log_info "Installing JS dependencies..."
-    npm install --legacy-peer-deps
-}
+# Fetch the latest CI-built nospoon arm64-v8a binary.
+#
+# Source: GitHub Actions workflow .github/workflows/android.yml on the
+# nospoon-cpp branch. The workflow cross-compiles libsodium + libuv +
+# hyperdht-cpp + nospoon and uploads `libnospoon.so` as the artifact
+# `nospoon-android-arm64`. See the workflow file for the build details.
+#
+# Override the branch with NOSPOON_CI_BRANCH=other-branch.
+# Re-download with NOSPOON_FORCE_DOWNLOAD=1.
+download_binary() {
+    local BINARY_PATH="app/src/main/jniLibs/arm64-v8a/libnospoon.so"
+    local CI_BRANCH="${NOSPOON_CI_BRANCH:-nospoon-cpp}"
+    local REPO="jjacke13/nospoon"
 
-# Download bare-kit
-download_barekit() {
-    if [ -f "app/libs/bare-kit/classes.jar" ] && [ -d "app/libs/bare-kit/jni/arm64-v8a" ]; then
-        log_info "bare-kit already exists, skipping download"
+    if [ -f "$BINARY_PATH" ] && [ -z "$NOSPOON_FORCE_DOWNLOAD" ]; then
+        log_info "libnospoon.so already present (set NOSPOON_FORCE_DOWNLOAD=1 to refresh)"
         return
     fi
 
-    log_info "Downloading bare-kit..."
+    log_info "Fetching latest libnospoon.so from $REPO ($CI_BRANCH)..."
+    mkdir -p "$(dirname "$BINARY_PATH")"
 
-    # Create libs directory
-    mkdir -p app/libs/bare-kit
-
-    # Download and extract bare-kit from GitHub releases
-    local tmpdir="/tmp/barekit-$$"
+    local tmpdir="/tmp/nospoon-android-$$"
     mkdir -p "$tmpdir"
-    gh release download --repo holepunchto/bare-kit v1.15.2 \
-        --pattern "prebuilds.zip" \
-        --dir "$tmpdir" || {
-        log_error "Failed to download bare-kit. Make sure gh CLI is authenticated:"
-        log_error "  gh auth login"
-        rm -rf "$tmpdir"
-        exit 1
-    }
+    trap 'rm -rf "$tmpdir"' RETURN
 
-    # Extract Android prebuilds
-    mkdir -p app/libs/bare-kit/jni
-    unzip -o "$tmpdir/prebuilds.zip" "android/bare-kit/jni/*" "android/bare-kit/classes.jar" -d "$tmpdir/extract" > /dev/null
-    mv "$tmpdir/extract/android/bare-kit/jni/"* app/libs/bare-kit/jni/
-    mv "$tmpdir/extract/android/bare-kit/classes.jar" app/libs/bare-kit/
-    rm -rf "$tmpdir"
+    local RUN_ID
+    RUN_ID=$(gh run list \
+        --repo "$REPO" \
+        --workflow android.yml \
+        --branch "$CI_BRANCH" \
+        --status success \
+        --limit 1 \
+        --json databaseId -q '.[0].databaseId' 2>/dev/null || true)
 
-    log_info "bare-kit installed to app/libs/bare-kit"
-}
-
-# Link native addons
-link_addons() {
-    log_info "Linking native addons..."
-
-    # Create addons directory
-    mkdir -p app/src/main/addons
-
-    # Link bare-kit and its dependencies to the addons directory
-    npx bare-link --preset android --out app/src/main/addons
-
-    # Verify addons were linked
-    local so_count
-    so_count=$(find app/src/main/addons -name '*.so' 2>/dev/null | wc -l)
-    if [ "$so_count" -gt 0 ]; then
-        log_info "Native addons linked: $so_count .so files"
-    else
-        log_warn "No .so files in addons directory"
-    fi
-}
-
-# Bundle JS worklet (embed everything, no linking)
-bundle_worklet() {
-    log_info "Bundling JS worklet..."
-
-    # Create assets directory if needed
-    mkdir -p app/src/main/assets
-
-    # Bundle WITHOUT --linked - embed native addons in the bundle
-    npx bare-pack --preset android --out app/src/main/assets/client.bundle worklet/client.js
-
-    # Verify bundle was created
-    if [ ! -f "app/src/main/assets/client.bundle" ]; then
-        log_error "Failed to create client.bundle"
+    if [ -z "$RUN_ID" ]; then
+        log_error "No successful android.yml run found on $CI_BRANCH"
+        log_error "Push to GitHub to trigger one, or check the workflow status:"
+        log_error "  gh run list --repo $REPO --workflow android.yml"
         exit 1
     fi
 
-    log_info "Bundle created: $(ls -la app/src/main/assets/client.bundle)"
+    log_info "Using CI run $RUN_ID"
+    if ! gh run download "$RUN_ID" \
+            --repo "$REPO" \
+            --name nospoon-android-arm64 \
+            --dir "$tmpdir" 2>&1; then
+        log_error "Failed to download nospoon-android-arm64 artifact from run $RUN_ID"
+        exit 1
+    fi
+
+    if [ ! -f "$tmpdir/libnospoon.so" ]; then
+        log_error "Artifact downloaded but libnospoon.so is missing"
+        log_error "Tmpdir contents:"
+        ls -la "$tmpdir" >&2
+        exit 1
+    fi
+
+    cp "$tmpdir/libnospoon.so" "$BINARY_PATH"
+    chmod +x "$BINARY_PATH"
+    log_info "Installed: $BINARY_PATH ($(stat -c%s "$BINARY_PATH" 2>/dev/null || stat -f%z "$BINARY_PATH") bytes)"
 }
 
 # Build debug APK
@@ -161,10 +136,7 @@ main() {
     log_info "================================"
 
     check_env
-    install_deps
-    download_barekit
-    link_addons
-    bundle_worklet
+    download_binary
     build_apk
 
     log_info "Done!"
