@@ -3,8 +3,62 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <stdint.h>
+#include <pthread.h>
+#include <errno.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
+#include <android/log.h>
+
+// Reader thread: pulls bytes from the read end of a pipe whose write end is
+// dup2'd onto the child's stdout/stderr, and forwards each line to logcat
+// under the tag "nospoon-child". Without this the child's fprintf(stderr,…)
+// output disappears — Android does not route fork+exec'd children's stdio
+// to logcat by default, so any startup error message is lost.
+static void *child_log_reader(void *arg) {
+    int fd = (int)(intptr_t)arg;
+    char buf[2048];
+    char line[2048];
+    size_t line_len = 0;
+    ssize_t n;
+
+    while ((n = read(fd, buf, sizeof(buf))) > 0) {
+        for (ssize_t i = 0; i < n; i++) {
+            char c = buf[i];
+            if (c == '\n' || line_len >= sizeof(line) - 1) {
+                line[line_len] = '\0';
+                if (line_len > 0) {
+                    __android_log_print(ANDROID_LOG_INFO, "nospoon-child", "%s", line);
+                }
+                line_len = 0;
+                if (c != '\n' && c != '\r') line[line_len++] = c;
+            } else if (c != '\r') {
+                line[line_len++] = c;
+            }
+        }
+    }
+    if (line_len > 0) {
+        line[line_len] = '\0';
+        __android_log_print(ANDROID_LOG_INFO, "nospoon-child", "%s", line);
+    }
+    close(fd);
+    return NULL;
+}
+
+// Build a pipe whose read end is consumed by a detached logger thread.
+// Returns the write-end fd (to be dup2'd in the child) or -1 on failure.
+static int spawn_log_pipe(void) {
+    int p[2];
+    if (pipe(p) < 0) return -1;
+    pthread_t tid;
+    if (pthread_create(&tid, NULL, child_log_reader, (void *)(intptr_t)p[0]) != 0) {
+        close(p[0]);
+        close(p[1]);
+        return -1;
+    }
+    pthread_detach(tid);
+    return p[1];
+}
 
 // Fork+exec preserving all fds. Creates a Unix socketpair for IPC
 // (status messages from child + TUN fd passing via SCM_RIGHTS).
@@ -51,14 +105,31 @@ Java_com_nospoon_vpn_NativeHelper_exec(JNIEnv *env, jclass cls, jobjectArray arg
         }
     }
 
+    // Set up a pipe to capture the child's stdout/stderr → logcat. Created
+    // before fork so both ends are inherited and the dup2 in the child works.
+    int log_write_fd = spawn_log_pipe();
+
     pid_t pid = fork();
     if (pid == 0) {
         // Child — close parent's socket end, keep child's
         close(sockfd[0]);
+        if (log_write_fd >= 0) {
+            dup2(log_write_fd, STDOUT_FILENO);
+            dup2(log_write_fd, STDERR_FILENO);
+            close(log_write_fd);
+        }
         // All fds inherited (including child_sock and any TUN fd passed later)
         execv(argv[0], argv);
+        // execv failed — write error directly via __android_log so we see it
+        // even if stdio redirection didn't work.
+        __android_log_print(ANDROID_LOG_ERROR, "nospoon-child",
+                            "execv(%s) failed: errno=%d", argv[0], errno);
         _exit(127);
     }
+
+    // Parent — close our copy of the pipe write end so the reader thread sees
+    // EOF when the child exits. The child still has its dup2'd copy.
+    if (log_write_fd >= 0) close(log_write_fd);
 
     // Parent — close child's socket end
     close(sockfd[1]);
