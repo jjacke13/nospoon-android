@@ -42,65 +42,75 @@ check_env() {
     log_info "  ANDROID_HOME=$ANDROID_HOME"
 }
 
-# Fetch the latest CI-built nospoon arm64-v8a binary.
+# Fetch libhyperdht_jni.so from the latest hyperdht-cpp Android CI build.
 #
-# Source: GitHub Actions workflow .github/workflows/android.yml on the
-# nospoon-cpp branch. The workflow cross-compiles libsodium + libuv +
-# hyperdht-cpp + nospoon and uploads `libnospoon.so` as the artifact
-# `nospoon-android-arm64`. See the workflow file for the build details.
+# Source: hyperdht-cpp's `build.yml` workflow uploads
+# `hyperdht-android-arm64` (a tarball containing lib/libhyperdht_jni.so
+# + the static deps + headers). We extract just the JNI .so.
 #
-# Override the branch with NOSPOON_CI_BRANCH=other-branch.
+# Override the source branch with HYPERDHT_CI_BRANCH=other-branch.
 # Re-download with NOSPOON_FORCE_DOWNLOAD=1.
 download_binary() {
-    local BINARY_PATH="app/src/main/jniLibs/arm64-v8a/libnospoon.so"
-    local CI_BRANCH="${NOSPOON_CI_BRANCH:-nospoon-cpp}"
-    local REPO="jjacke13/nospoon"
+    local BINARY_PATH="app/src/main/jniLibs/arm64-v8a/libhyperdht_jni.so"
+    local CI_BRANCH="${HYPERDHT_CI_BRANCH:-main}"
+    local REPO="jjacke13/hyperdht-cpp"
 
     if [ -f "$BINARY_PATH" ] && [ -z "$NOSPOON_FORCE_DOWNLOAD" ]; then
-        log_info "libnospoon.so already present (set NOSPOON_FORCE_DOWNLOAD=1 to refresh)"
+        log_info "libhyperdht_jni.so already present (set NOSPOON_FORCE_DOWNLOAD=1 to refresh)"
         return
     fi
 
-    log_info "Fetching latest libnospoon.so from $REPO ($CI_BRANCH)..."
+    log_info "Fetching latest libhyperdht_jni.so from $REPO ($CI_BRANCH)..."
     mkdir -p "$(dirname "$BINARY_PATH")"
 
-    local tmpdir="/tmp/nospoon-android-$$"
+    local tmpdir="/tmp/hyperdht-jni-$$"
     mkdir -p "$tmpdir"
     trap 'rm -rf "$tmpdir"' RETURN
 
     local RUN_ID
     RUN_ID=$(gh run list \
         --repo "$REPO" \
-        --workflow android.yml \
         --branch "$CI_BRANCH" \
         --status success \
-        --limit 1 \
-        --json databaseId -q '.[0].databaseId' 2>/dev/null || true)
+        --limit 5 \
+        --json databaseId,name -q '.[] | select(.name | test("[Bb]uild")) | .databaseId' 2>/dev/null \
+        | head -1 || true)
 
     if [ -z "$RUN_ID" ]; then
-        log_error "No successful android.yml run found on $CI_BRANCH"
-        log_error "Push to GitHub to trigger one, or check the workflow status:"
-        log_error "  gh run list --repo $REPO --workflow android.yml"
+        log_error "No successful build found on $REPO/$CI_BRANCH"
+        log_error "Check workflow status with:"
+        log_error "  gh run list --repo $REPO"
         exit 1
     fi
 
     log_info "Using CI run $RUN_ID"
     if ! gh run download "$RUN_ID" \
             --repo "$REPO" \
-            --name nospoon-android-arm64 \
+            --name hyperdht-android-arm64 \
             --dir "$tmpdir" 2>&1; then
-        log_error "Failed to download nospoon-android-arm64 artifact from run $RUN_ID"
+        log_error "Failed to download hyperdht-android-arm64 artifact from run $RUN_ID"
         exit 1
     fi
 
-    if [ ! -f "$tmpdir/libnospoon.so" ]; then
-        log_error "Artifact downloaded but libnospoon.so is missing"
-        log_error "Tmpdir contents:"
-        ls -la "$tmpdir" >&2
+    # Artifact is hyperdht-android-arm64.tar.gz containing
+    #   lib/libhyperdht_jni.so, lib/libhyperdht.a, lib/libudx.a, …
+    # We just need the JNI shared lib.
+    local tarball
+    tarball=$(find "$tmpdir" -maxdepth 2 -name "hyperdht-android-arm64.tar.gz" | head -1)
+    if [ -z "$tarball" ]; then
+        log_error "Tarball not found in artifact. Tmpdir contents:"
+        find "$tmpdir" >&2
         exit 1
     fi
 
-    cp "$tmpdir/libnospoon.so" "$BINARY_PATH"
+    tar xzf "$tarball" -C "$tmpdir"
+    if [ ! -f "$tmpdir/lib/libhyperdht_jni.so" ]; then
+        log_error "lib/libhyperdht_jni.so missing inside artifact tarball"
+        find "$tmpdir" >&2
+        exit 1
+    fi
+
+    cp "$tmpdir/lib/libhyperdht_jni.so" "$BINARY_PATH"
     chmod +x "$BINARY_PATH"
     log_info "Installed: $BINARY_PATH ($(stat -c%s "$BINARY_PATH" 2>/dev/null || stat -f%z "$BINARY_PATH") bytes)"
 }

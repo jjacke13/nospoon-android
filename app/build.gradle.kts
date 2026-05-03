@@ -15,18 +15,10 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         ndk {
+            // libhyperdht_jni.so is shipped only for arm64-v8a; restrict
+            // the APK to that ABI so we don't end up with broken builds
+            // on other ABIs.
             abiFilters += "arm64-v8a"
-        }
-        externalNativeBuild {
-            cmake {
-                cFlags += "-O2"
-            }
-        }
-    }
-
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/jni/CMakeLists.txt")
         }
     }
 
@@ -47,13 +39,17 @@ android {
 
     sourceSets {
         getByName("main") {
-            // libnospoon.so goes in jniLibs/arm64-v8a/
+            // libhyperdht_jni.so goes in jniLibs/arm64-v8a/
             jniLibs.srcDirs("src/main/jniLibs")
         }
     }
 }
 
 dependencies {
+    // Coroutines — required by the hyperdht-cpp Kotlin wrapper
+    // (HyperDHT uses suspend fns + Channel/Flow for stream data).
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
     // Material Design 3 (includes RecyclerView)
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.core:core-ktx:1.13.1")

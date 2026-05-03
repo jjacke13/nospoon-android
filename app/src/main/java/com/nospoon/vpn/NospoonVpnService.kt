@@ -10,48 +10,97 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.os.PowerManager
-import android.system.ErrnoException
-import android.system.Os
-import android.system.OsConstants
 import android.util.Log
+import com.hyperdht.DhtException
+import com.hyperdht.DhtOptions
+import com.hyperdht.HyperDHT
+import com.hyperdht.Stream
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.File
-import java.io.FileDescriptor
 import java.io.FileInputStream
-import java.io.InputStreamReader
+import java.io.FileOutputStream
 
+/**
+ * Foreground VPN service that bridges the Android TUN device to a remote
+ * peer over an encrypted SecretStream channel exposed by the
+ * hyperdht-cpp Kotlin wrapper.
+ *
+ * Architecture (no native binary, no JNI fork+exec):
+ *
+ *   VpnService.Builder       — owns TUN fd; configures IP/MTU/routes
+ *           │
+ *           ▼
+ *   FileInputStream(fd) ──► tun→stream coroutine ──► Stream.write(Framing.encode(pkt))
+ *           ▲
+ *           │
+ *   FileOutputStream(fd) ◄─ stream→tun coroutine ◄── FrameDecoder.feed(Stream.data)
+ *
+ *   HyperDHT (com.hyperdht wrapper) owns its own libuv loop on a dedicated
+ *   thread; we only touch its public suspend API. dht.onNetworkChange { … }
+ *   is what keeps the connection alive across Wi-Fi ↔ mobile-data switches:
+ *   we close the current stream, the outer reconnect loop opens a fresh
+ *   one, and the underlying UDP socket is rebound by the wrapper.
+ */
 class NospoonVpnService : VpnService() {
 
     companion object {
         const val TAG = "NospoonVPN"
         const val ACTION_START = "com.nospoon.vpn.START"
         const val ACTION_STOP = "com.nospoon.vpn.STOP"
-        const val EXTRA_CONFIG_JSON = "configJson"
-        const val NOTIFICATION_ID = 1
-        const val CHANNEL_ID = "nospoon_vpn"
-        const val ACTION_STATUS = "com.nospoon.vpn.STATUS"
         const val ACTION_QUERY = "com.nospoon.vpn.QUERY"
+        const val ACTION_STATUS = "com.nospoon.vpn.STATUS"
+        const val EXTRA_CONFIG_JSON = "configJson"
         const val EXTRA_STATUS_TEXT = "statusText"
         const val EXTRA_CONNECTED = "connected"
+        const val NOTIFICATION_ID = 1
+        const val CHANNEL_ID = "nospoon_vpn"
+
+        // Match cpp/framing.hpp KEEPALIVE_INTERVAL_MS — keeps the SecretStream
+        // alive across NATs / mobile carrier UDP timeouts.
+        private const val FRAMING_KEEPALIVE_INTERVAL_MS = 25_000L
+
+        // DHT-level keepalive (UDP-layer pings between peers).  Default in the
+        // wrapper is 5 s; bump to 25 s to align with framing and reduce
+        // mobile-radio wakeups.
+        private const val DHT_KEEPALIVE_MS = 25_000
+
+        // Reconnect backoff
+        private const val INITIAL_RETRY_MS = 1_000L
+        private const val MAX_RETRY_MS = 30_000L
     }
 
-    private val handler = Handler(Looper.getMainLooper())
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var scope: CoroutineScope? = null
+    private var dht: HyperDHT? = null
+
+    // The currently-active stream.  Read by the tun→stream pump; replaced
+    // by the reconnect loop on every new connection.
+    @Volatile private var activeStream: Stream? = null
+
     private var vpnInterface: ParcelFileDescriptor? = null
-    private var nospoonPid: Int = -1
-    private var ipcSocketFd: Int = -1
-    private var ipcReader: Thread? = null
     private var wakeLock: PowerManager.WakeLock? = null
-    private var pendingConfig: JSONObject? = null
 
     private var currentStatusText = "Disconnected"
     private var currentConnected = false
-    private var tunFdForBinary: Int = -1
+
+    // ─────────────────────────────────────────────────────────────────
+    // Service entry points
+    // ─────────────────────────────────────────────────────────────────
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
-                val configJson = intent.getStringExtra(EXTRA_CONFIG_JSON) ?: return START_NOT_STICKY
+                val configJson = intent.getStringExtra(EXTRA_CONFIG_JSON)
+                    ?: return START_NOT_STICKY
                 val config = try {
                     JSONObject(configJson)
                 } catch (e: Exception) {
@@ -63,7 +112,7 @@ class NospoonVpnService : VpnService() {
                 return START_STICKY
             }
             ACTION_STOP -> {
-                stopVpn()
+                cleanup()
                 return START_NOT_STICKY
             }
             ACTION_QUERY -> {
@@ -74,10 +123,23 @@ class NospoonVpnService : VpnService() {
         return START_NOT_STICKY
     }
 
+    override fun onDestroy() {
+        cleanup()
+        super.onDestroy()
+    }
+
+    override fun onRevoke() {
+        cleanup()
+        super.onRevoke()
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Notification + status broadcast (unchanged)
+    // ─────────────────────────────────────────────────────────────────
+
     private fun buildNotification(text: String): Notification {
         val tapIntent = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java),
+            this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val stopIntent = PendingIntent.getService(
@@ -113,14 +175,35 @@ class NospoonVpnService : VpnService() {
             .notify(NOTIFICATION_ID, buildNotification(text))
     }
 
+    private fun broadcastStatus(text: String, connected: Boolean) {
+        currentStatusText = text
+        currentConnected = connected
+        sendBroadcast(Intent(ACTION_STATUS).apply {
+            setPackage(packageName)
+            putExtra(EXTRA_STATUS_TEXT, text)
+            putExtra(EXTRA_CONNECTED, connected)
+        })
+    }
+
+    private fun setStatus(text: String, connected: Boolean) {
+        mainHandler.post {
+            updateNotification(text)
+            broadcastStatus(text, connected)
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // VPN lifecycle
+    // ─────────────────────────────────────────────────────────────────
+
     private fun startVpn(config: JSONObject) {
-        if (nospoonPid > 0) {
+        if (scope != null) {
             Log.d(TAG, "Cleaning up previous connection before restart")
             cleanup()
         }
 
-        pendingConfig = config
         startForegroundNotification()
+        broadcastStatus("Connecting...", false)
 
         if (wakeLock == null) {
             val pm = getSystemService(PowerManager::class.java)
@@ -129,93 +212,27 @@ class NospoonVpnService : VpnService() {
             }
         }
 
-        // Write config to temp file
-        val configFile = File(cacheDir, "nospoon-config.jsonc")
-        configFile.writeText(config.toString())
-
-        val binaryPath = applicationInfo.nativeLibraryDir + "/libnospoon.so"
-        if (!File(binaryPath).exists()) {
-            Log.e(TAG, "nospoon binary not found at $binaryPath")
-            broadcastStatus("Error: binary not found", false)
+        if (!establishVpn(config)) {
             cleanup()
             return
         }
 
-        // Phase 1: Fork binary with --fd-socket (NO VPN yet).
-        // Binary connects DHT over regular internet — works on same LAN.
-        // The socketpair is used for IPC: binary sends "CONNECTED",
-        // we send back the TUN fd via SCM_RIGHTS.
-        val result = NativeHelper.exec(arrayOf(
-            binaryPath, "up", "--fd-socket=CHILD_SOCK", configFile.absolutePath
-        ))
-
-        if (result == null || result[0] <= 0) {
-            Log.e(TAG, "Failed to fork nospoon binary")
-            broadcastStatus("Error: fork failed", false)
-            cleanup()
-            return
-        }
-
-        nospoonPid = result[0]
-        ipcSocketFd = result[1]
-        val childSockFd = result[2]
-
-        // Fix up the --fd-socket argument with the actual child fd number.
-        // The child already has it inherited; we need to tell it which fd.
-        // Actually, we need to pass the fd number BEFORE exec...
-        // Let's use a different approach: pass it as the last arg.
-
-        Log.i(TAG, "nospoon child pid: $nospoonPid, ipc socket: $ipcSocketFd, child sock: $childSockFd")
-        broadcastStatus("Connecting...", false)
-
-        // Read IPC messages from child on a background thread
-        ipcReader = Thread {
-            val fdField = FileDescriptor::class.java.getDeclaredField("descriptor")
-            fdField.isAccessible = true
+        val s = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        scope = s
+        s.launch {
             try {
-                val fis = FileInputStream(FileDescriptor().also {
-                    fdField.setInt(it, ipcSocketFd)
-                })
-                val reader = BufferedReader(InputStreamReader(fis))
-                var line: String?
-                while (reader.readLine().also { line = it } != null) {
-                    val l = line!!.trim()
-                    if (l.isEmpty()) continue
-                    Log.d(TAG, "ipc: $l")
-
-                    if (l == "CONNECTED") {
-                        // Phase 2: DHT connected — establish VPN and send TUN fd
-                        handler.post { establishAndSendTunFd(config) }
-                    } else if (l == "STATUS:connected") {
-                        handler.post {
-                            updateNotification("Connected")
-                            broadcastStatus("Connected", true)
-                        }
-                    } else if (l == "STATUS:reconnecting") {
-                        handler.post {
-                            updateNotification("Reconnecting...")
-                            broadcastStatus("Reconnecting...", false)
-                        }
-                    }
-                }
+                runVpnLoop(config)
             } catch (e: Exception) {
-                Log.d(TAG, "ipc reader ended: ${e.message}")
+                Log.e(TAG, "VPN loop crashed: ${e.javaClass.simpleName}: ${e.message}", e)
+                broadcastStatus("Error: ${e.message}", false)
+            } finally {
+                mainHandler.post { cleanup() }
             }
-
-            handler.post {
-                Log.i(TAG, "nospoon process exited")
-                broadcastStatus("Disconnected", false)
-                cleanup()
-            }
-        }.apply {
-            isDaemon = true
-            start()
         }
     }
 
-    // Phase 2: Called when binary reports DHT is connected.
-    // NOW establish VPN and send TUN fd to binary via SCM_RIGHTS.
-    private fun establishAndSendTunFd(config: JSONObject) {
+    /** Configure and bring up the TUN interface.  Sets [vpnInterface] on success. */
+    private fun establishVpn(config: JSONObject): Boolean {
         val ipFull = config.optString("ip", "10.0.0.2/24")
         val parts = ipFull.split("/")
         val ip = parts[0]
@@ -230,6 +247,9 @@ class NospoonVpnService : VpnService() {
 
         if (fullTunnel) {
             builder.addRoute("0.0.0.0", 0)
+            // Our own DHT/IPC traffic must NOT loop through the VPN —
+            // otherwise the bootstrap dies.  addDisallowedApplication is
+            // the canonical way to carve our own UID out of the tunnel.
             builder.addDisallowedApplication(packageName)
             builder.addDnsServer("1.1.1.1")
             builder.addDnsServer("8.8.8.8")
@@ -239,107 +259,204 @@ class NospoonVpnService : VpnService() {
             Log.d(TAG, "Subnet mode: ${subnetAddress(ip, prefix)}/$prefix")
         }
 
-        vpnInterface = builder.establish()
-        if (vpnInterface == null) {
+        val pfd = builder.establish()
+        if (pfd == null) {
             Log.e(TAG, "Failed to establish VPN interface")
             broadcastStatus("Error: VPN permission denied", false)
-            cleanup()
-            return
+            return false
         }
-
-        // Get a blocking TUN fd
-        val fdField = FileDescriptor::class.java.getDeclaredField("descriptor")
-        fdField.isAccessible = true
-
-        val dupPfd = vpnInterface!!.dup()
-        val tunFd = dupPfd.detachFd()
-        val tunFdObj = FileDescriptor()
-        fdField.setInt(tunFdObj, tunFd)
-
-        val fileFlags = Os.fcntlInt(tunFdObj, OsConstants.F_GETFL, 0)
-        Os.fcntlInt(tunFdObj, OsConstants.F_SETFL, fileFlags and OsConstants.O_NONBLOCK.inv())
-
-        tunFdForBinary = tunFd
-        Log.d(TAG, "Sending TUN fd $tunFd to child via SCM_RIGHTS")
-
-        // Send TUN fd to child via the socketpair
-        val ok = NativeHelper.sendFd(ipcSocketFd, tunFd)
-        if (!ok) {
-            Log.e(TAG, "Failed to send TUN fd to child")
-            broadcastStatus("Error: fd send failed", false)
-            cleanup()
-            return
-        }
-
-        Log.i(TAG, "VPN established, TUN fd sent to child")
-        updateNotification("Connected")
-        broadcastStatus("Connected", true)
+        vpnInterface = pfd
+        return true
     }
 
-    private fun broadcastStatus(text: String, connected: Boolean) {
-        currentStatusText = text
-        currentConnected = connected
-        sendBroadcast(Intent(ACTION_STATUS).apply {
-            setPackage(packageName)
-            putExtra(EXTRA_STATUS_TEXT, text)
-            putExtra(EXTRA_CONNECTED, connected)
-        })
+    /**
+     * Outer connect/forward/reconnect loop.  Stays in this coroutine for
+     * the lifetime of the VPN session.  Returns when [scope] is cancelled.
+     */
+    private suspend fun runVpnLoop(config: JSONObject) = coroutineScope {
+        val serverPk = hexToBytes(config.getString("server"))
+        val seedBytes = config.optString("seed", "")
+            .takeIf { it.isNotEmpty() }
+            ?.let { hexToBytes(it) }
+
+        val dhtNode = HyperDHT(DhtOptions(
+            usePublicBootstrap = true,
+            connectionKeepAlive = DHT_KEEPALIVE_MS,
+            seed = seedBytes,
+        ))
+        dht = dhtNode
+        dhtNode.start()
+        Log.i(TAG, "DHT listening on port ${dhtNode.port} — bootstrapping")
+        dhtNode.awaitBootstrapped()
+        Log.i(TAG, "DHT bootstrapped")
+
+        // Kick the reconnect path on network change — closing activeStream
+        // unblocks the inner forwarding loop, which loops back up to
+        // dhtNode.connect() against the freshly-bound socket.
+        dhtNode.onNetworkChange {
+            Log.i(TAG, "Network changed — forcing stream reconnect")
+            try { activeStream?.close() } catch (_: Exception) {}
+        }
+
+        // Lifetime-of-VPN tun→stream pump.  Reads block in the IO thread
+        // pool; cancellation is delivered by closing vpnInterface in
+        // cleanup(), which makes read() throw.
+        val pfd = vpnInterface!!
+        val tunReaderJob = launch {
+            val tunIn = FileInputStream(pfd.fileDescriptor)
+            val readBuf = ByteArray(64 * 1024)  // > any plausible MTU
+            while (isActive) {
+                val n = try {
+                    tunIn.read(readBuf)
+                } catch (e: Exception) {
+                    Log.d(TAG, "tun read ended: ${e.message}")
+                    break
+                }
+                if (n <= 0) break
+                val s = activeStream ?: continue  // drop while reconnecting
+                try {
+                    s.write(Framing.encode(readBuf, 0, n))
+                } catch (e: Exception) {
+                    Log.d(TAG, "stream write failed: ${e.message}")
+                    // outer loop will detect via stream.data ending
+                }
+            }
+        }
+
+        // Connect/forward/reconnect inner loop.
+        var retryMs = INITIAL_RETRY_MS
+        while (isActive) {
+            val s = try {
+                Log.i(TAG, "Connecting to server...")
+                dhtNode.connect(serverPk)
+            } catch (e: DhtException) {
+                Log.w(TAG, "Connect failed: ${e.code} ${e.message}")
+                null
+            } catch (e: Exception) {
+                Log.w(TAG, "Connect error: ${e.javaClass.simpleName}: ${e.message}")
+                null
+            }
+
+            if (s != null) {
+                try {
+                    s.awaitOpen()
+                    Log.i(TAG, "Stream open — encrypted tunnel established")
+                    activeStream = s
+                    setStatus("Connected", true)
+                    retryMs = INITIAL_RETRY_MS
+
+                    forwardStreamToTun(s, pfd)  // suspends until stream ends
+
+                    Log.i(TAG, "Stream closed")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Forward error: ${e.message}")
+                } finally {
+                    activeStream = null
+                    try { s.close() } catch (_: Exception) {}
+                }
+            }
+
+            if (!isActive) break
+
+            setStatus("Reconnecting...", false)
+            val jitter = (Math.random() * 1000).toLong()
+            delay(retryMs + jitter)
+            retryMs = (retryMs * 2).coerceAtMost(MAX_RETRY_MS)
+        }
+
+        tunReaderJob.cancel()
     }
+
+    /**
+     * Fan out [s.data] frames into the TUN, plus a 25 s framing keepalive.
+     * Returns when the stream's data flow completes (peer closed) or the
+     * scope is cancelled.
+     */
+    private suspend fun forwardStreamToTun(s: Stream, pfd: ParcelFileDescriptor) =
+        coroutineScope {
+            val tunOut = FileOutputStream(pfd.fileDescriptor)
+            val decoder = FrameDecoder()
+
+            val keepalive = launch {
+                while (isActive) {
+                    delay(FRAMING_KEEPALIVE_INTERVAL_MS)
+                    try { s.write(Framing.keepalive) } catch (_: Exception) { return@launch }
+                }
+            }
+
+            try {
+                s.data.collect { chunk ->
+                    decoder.feed(chunk) { pkt ->
+                        try { tunOut.write(pkt) } catch (e: Exception) {
+                            Log.w(TAG, "TUN write failed: ${e.message}")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.d(TAG, "stream.data ended: ${e.message}")
+            } finally {
+                keepalive.cancel()
+            }
+        }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Cleanup
+    // ─────────────────────────────────────────────────────────────────
+
+    private fun cleanup() {
+        // Order matters: cancel coroutines first so they don't try to use
+        // resources we're about to free.
+        scope?.cancel()
+        scope = null
+
+        try { activeStream?.close() } catch (_: Exception) {}
+        activeStream = null
+
+        // dht.close() does runBlocking internally — must run off the main
+        // thread.  Hand it off; it's fire-and-forget.
+        val d = dht
+        dht = null
+        if (d != null) {
+            @Suppress("OPT_IN_USAGE")
+            GlobalScope.launch(Dispatchers.IO) {
+                try { d.close() } catch (e: Exception) {
+                    Log.w(TAG, "dht.close error: ${e.message}")
+                }
+            }
+        }
+
+        // Closing vpnInterface unblocks any pending TUN read in
+        // tunReaderJob (read() throws), which lets the outer scope unwind.
+        try { vpnInterface?.close() } catch (_: Exception) {}
+        vpnInterface = null
+
+        if (wakeLock?.isHeld == true) wakeLock?.release()
+        wakeLock = null
+
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        broadcastStatus("Disconnected", false)
+        stopSelf()
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────────────────────────
 
     private fun subnetAddress(hostIp: String, prefix: Int): String {
         val parts = hostIp.split(".").map { it.toInt() }
         val ipInt = (parts[0] shl 24) or (parts[1] shl 16) or (parts[2] shl 8) or parts[3]
         val mask = if (prefix == 0) 0 else (-1 shl (32 - prefix))
         val network = ipInt and mask
-        return "${(network shr 24) and 0xFF}.${(network shr 16) and 0xFF}.${(network shr 8) and 0xFF}.${network and 0xFF}"
+        return "${(network shr 24) and 0xFF}.${(network shr 16) and 0xFF}." +
+                "${(network shr 8) and 0xFF}.${network and 0xFF}"
     }
 
-    private fun stopVpn() {
-        if (nospoonPid > 0) NativeHelper.kill(nospoonPid)
-        handler.postDelayed({ cleanup() }, 2000)
-    }
-
-    private fun cleanup() {
-        if (nospoonPid > 0) {
-            NativeHelper.kill(nospoonPid)
-            nospoonPid = -1
+    private fun hexToBytes(hex: String): ByteArray {
+        require(hex.length % 2 == 0) { "Hex string must have even length" }
+        val out = ByteArray(hex.length / 2)
+        for (i in out.indices) {
+            out[i] = hex.substring(i * 2, i * 2 + 2).toInt(16).toByte()
         }
-
-        if (ipcSocketFd >= 0) {
-            try { Os.close(FileDescriptor().also {
-                val f = FileDescriptor::class.java.getDeclaredField("descriptor")
-                f.isAccessible = true
-                f.setInt(it, ipcSocketFd)
-            }) } catch (_: ErrnoException) {}
-            ipcSocketFd = -1
-        }
-        ipcReader = null
-
-        if (tunFdForBinary >= 0) {
-            try { Os.close(FileDescriptor().also {
-                val f = FileDescriptor::class.java.getDeclaredField("descriptor")
-                f.isAccessible = true
-                f.setInt(it, tunFdForBinary)
-            }) } catch (_: ErrnoException) {}
-            tunFdForBinary = -1
-        }
-        vpnInterface?.close()
-        vpnInterface = null
-        pendingConfig = null
-        if (wakeLock?.isHeld == true) wakeLock?.release()
-        wakeLock = null
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
-    }
-
-    override fun onDestroy() {
-        cleanup()
-        super.onDestroy()
-    }
-
-    override fun onRevoke() {
-        broadcastStatus("Disconnected", false)
-        cleanup()
-        super.onRevoke()
+        return out
     }
 }
