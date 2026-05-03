@@ -10,10 +10,13 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.os.PowerManager
+import android.system.Os
+import android.system.OsConstants
 import android.util.Log
 import com.hyperdht.DhtException
 import com.hyperdht.DhtOptions
 import com.hyperdht.HyperDHT
+import com.hyperdht.KeyPair
 import com.hyperdht.Stream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -76,6 +79,13 @@ class NospoonVpnService : VpnService() {
         // Reconnect backoff
         private const val INITIAL_RETRY_MS = 1_000L
         private const val MAX_RETRY_MS = 30_000L
+
+        // After this many consecutive connect failures we tear down the
+        // HyperDHT instance and create a fresh one — the underlying UDP
+        // socket has likely been left bound to a dead interface (Wi-Fi →
+        // mobile-data switch, or it never got a valid local interface on
+        // a cold start).  Matches the JS impl and cpp/ client.
+        private const val MAX_FAILURES_BEFORE_RESTART = 3
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -212,10 +222,10 @@ class NospoonVpnService : VpnService() {
             }
         }
 
-        if (!establishVpn(config)) {
-            cleanup()
-            return
-        }
+        // NOTE: deliberately do not establish the VPN here — we want the
+        // DHT bootstrap + first peer connect to happen *before* any VPN
+        // routes/DNS overrides are in place, mirroring the bare-runtime
+        // architecture.  See runVpnLoop().
 
         val s = CoroutineScope(Dispatchers.IO + SupervisorJob())
         scope = s
@@ -270,8 +280,19 @@ class NospoonVpnService : VpnService() {
     }
 
     /**
-     * Outer connect/forward/reconnect loop.  Stays in this coroutine for
-     * the lifetime of the VPN session.  Returns when [scope] is cancelled.
+     * DHT-first / VPN-later lifecycle.
+     *
+     *   1. Bring up the DHT and bootstrap on the *real* network (no VPN
+     *      routes in the way; the bare-runtime worklet did exactly this).
+     *   2. Try `dht.connect(serverPk)` until one succeeds and the
+     *      SecretStream opens.
+     *   3. Only THEN call VpnService.Builder.establish(): we now know we
+     *      have a working tunnel, the kernel routes are safe to install,
+     *      and the freshly-opened DHT socket has already bound to the
+     *      correct underlying interface.
+     *   4. Spin up tun→stream pump and stream→tun forwarder.
+     *   5. On stream close (peer disconnect, network change), keep the
+     *      VpnService TUN alive and just reconnect the SecretStream.
      */
     private suspend fun runVpnLoop(config: JSONObject) = coroutineScope {
         val serverPk = hexToBytes(config.getString("server"))
@@ -279,52 +300,57 @@ class NospoonVpnService : VpnService() {
             .takeIf { it.isNotEmpty() }
             ?.let { hexToBytes(it) }
 
-        val dhtNode = HyperDHT(DhtOptions(
+        // Print the client's public key on startup so the user can verify
+        // it matches whatever's whitelisted on the server's firewall.
+        // (LAN test working today already proves these match — but mobile
+        // data troubleshooting needs visibility.)
+        if (seedBytes != null) {
+            try {
+                val pk = KeyPair.fromSeed(seedBytes).publicKey
+                Log.i(TAG, "Our public key (must be in server peers config): " +
+                        bytesToHex(pk))
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not derive public key from seed: ${e.message}")
+            }
+        } else {
+            Log.i(TAG, "No seed in config — using ephemeral keypair " +
+                    "(server with firewall will reject)")
+        }
+        Log.i(TAG, "Connecting to server pubkey: ${bytesToHex(serverPk)}")
+
+        // Factory — used both for the initial DHT and for restart_dht-style
+        // rebuilds after persistent connect failures (network switch leaves
+        // the UDP socket bound to a dead interface).
+        fun makeDht(): HyperDHT = HyperDHT(DhtOptions(
             usePublicBootstrap = true,
             connectionKeepAlive = DHT_KEEPALIVE_MS,
             seed = seedBytes,
         ))
-        dht = dhtNode
-        dhtNode.start()
-        Log.i(TAG, "DHT listening on port ${dhtNode.port} — bootstrapping")
-        dhtNode.awaitBootstrapped()
-        Log.i(TAG, "DHT bootstrapped")
 
-        // Kick the reconnect path on network change — closing activeStream
-        // unblocks the inner forwarding loop, which loops back up to
-        // dhtNode.connect() against the freshly-bound socket.
-        dhtNode.onNetworkChange {
-            Log.i(TAG, "Network changed — forcing stream reconnect")
-            try { activeStream?.close() } catch (_: Exception) {}
-        }
-
-        // Lifetime-of-VPN tun→stream pump.  Reads block in the IO thread
-        // pool; cancellation is delivered by closing vpnInterface in
-        // cleanup(), which makes read() throw.
-        val pfd = vpnInterface!!
-        val tunReaderJob = launch {
-            val tunIn = FileInputStream(pfd.fileDescriptor)
-            val readBuf = ByteArray(64 * 1024)  // > any plausible MTU
-            while (isActive) {
-                val n = try {
-                    tunIn.read(readBuf)
-                } catch (e: Exception) {
-                    Log.d(TAG, "tun read ended: ${e.message}")
-                    break
-                }
-                if (n <= 0) break
-                val s = activeStream ?: continue  // drop while reconnecting
-                try {
-                    s.write(Framing.encode(readBuf, 0, n))
-                } catch (e: Exception) {
-                    Log.d(TAG, "stream write failed: ${e.message}")
-                    // outer loop will detect via stream.data ending
-                }
+        // We DON'T act on dht.onNetworkChange — it fires when our own
+        // VpnService.Builder.establish() registers the TUN as a new
+        // network, which would self-trigger a reconnect.  Instead we
+        // detect a dead UDP socket by counting consecutive connect
+        // failures and rebuild the whole HyperDHT instance from scratch.
+        fun installNetChangeLogger(d: HyperDHT) {
+            d.onNetworkChange {
+                Log.d(TAG, "DHT reports network change (ignored; failure-counted)")
             }
         }
 
-        // Connect/forward/reconnect inner loop.
+        var dhtNode = makeDht()
+        dht = dhtNode
+        dhtNode.start()
+        Log.i(TAG, "DHT listening on port ${dhtNode.port} — bootstrapping (no VPN yet)")
+        dhtNode.awaitBootstrapped()
+        Log.i(TAG, "DHT bootstrapped")
+        installNetChangeLogger(dhtNode)
+        protectDhtSockets(dhtNode)
+
+        var tunReaderJob: Job? = null
         var retryMs = INITIAL_RETRY_MS
+        var consecutiveFailures = 0
+
         while (isActive) {
             val s = try {
                 Log.i(TAG, "Connecting to server...")
@@ -341,11 +367,81 @@ class NospoonVpnService : VpnService() {
                 try {
                     s.awaitOpen()
                     Log.i(TAG, "Stream open — encrypted tunnel established")
+                    consecutiveFailures = 0
+
+                    // Phase 2: first successful connect → bring up the TUN.
+                    // Subsequent reconnects keep the existing interface.
+                    if (vpnInterface == null) {
+                        if (!establishVpn(config)) {
+                            Log.e(TAG, "VPN establish failed after first connect — aborting")
+                            try { s.close() } catch (_: Exception) {}
+                            break
+                        }
+                        Log.i(TAG, "VPN interface up; starting forwarders")
+
+                        // VpnService hands us a non-blocking fd by default
+                        // on some Android versions.  FileInputStream.read()
+                        // on a non-blocking fd can return 0 immediately
+                        // when no packet is queued, which our loop would
+                        // misinterpret as EOF and exit silently — every
+                        // subsequent ping would then be dropped on read.
+                        // Force blocking mode (same as the bare-runtime
+                        // impl) so read() suspends until a packet arrives.
+                        try {
+                            val flags = Os.fcntlInt(
+                                vpnInterface!!.fileDescriptor,
+                                OsConstants.F_GETFL, 0)
+                            Os.fcntlInt(
+                                vpnInterface!!.fileDescriptor,
+                                OsConstants.F_SETFL,
+                                flags and OsConstants.O_NONBLOCK.inv())
+                            Log.d(TAG, "TUN fd set to blocking (was flags=$flags)")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to clear O_NONBLOCK on TUN: ${e.message}")
+                        }
+
+                        // Lifetime-of-VPN tun→stream pump.  Always writes
+                        // to whatever stream is currently active; drops
+                        // while activeStream is null (between reconnects).
+                        // Cancellation comes via closing vpnInterface in
+                        // cleanup(), which makes the blocking read() throw.
+                        val pfd = vpnInterface!!
+                        tunReaderJob = launch {
+                            val tunIn = FileInputStream(pfd.fileDescriptor)
+                            val readBuf = ByteArray(64 * 1024)  // > any plausible MTU
+                            var packetCount = 0L
+                            while (isActive) {
+                                val n = try {
+                                    tunIn.read(readBuf)
+                                } catch (e: Exception) {
+                                    Log.d(TAG, "tun read ended: ${e.message}")
+                                    break
+                                }
+                                if (n < 0) {
+                                    Log.d(TAG, "tun read returned $n — EOF")
+                                    break
+                                }
+                                if (n == 0) continue  // shouldn't happen on a blocking fd, but tolerate
+                                val cur = activeStream
+                                if (cur == null) continue  // drop while reconnecting
+                                if (packetCount < 5L || packetCount % 200L == 0L) {
+                                    Log.d(TAG, "tun→stream: $n bytes (#${packetCount + 1})")
+                                }
+                                packetCount++
+                                try {
+                                    cur.write(Framing.encode(readBuf, 0, n))
+                                } catch (e: Exception) {
+                                    Log.d(TAG, "stream write failed: ${e.message}")
+                                }
+                            }
+                        }
+                    }
+
                     activeStream = s
                     setStatus("Connected", true)
                     retryMs = INITIAL_RETRY_MS
 
-                    forwardStreamToTun(s, pfd)  // suspends until stream ends
+                    forwardStreamToTun(s, vpnInterface!!)  // suspends until stream ends
 
                     Log.i(TAG, "Stream closed")
                 } catch (e: Exception) {
@@ -353,6 +449,36 @@ class NospoonVpnService : VpnService() {
                 } finally {
                     activeStream = null
                     try { s.close() } catch (_: Exception) {}
+                }
+            } else {
+                consecutiveFailures++
+                if (consecutiveFailures >= MAX_FAILURES_BEFORE_RESTART && isActive) {
+                    Log.w(TAG, "$consecutiveFailures consecutive connect failures — " +
+                            "rebuilding DHT (UDP socket likely on a dead interface)")
+                    setStatus("Reconnecting...", false)
+
+                    val oldDht = dhtNode
+                    dhtNode = makeDht()
+                    dht = dhtNode
+                    dhtNode.start()
+                    Log.i(TAG, "Bootstrapping replacement DHT...")
+                    dhtNode.awaitBootstrapped()
+                    Log.i(TAG, "Replacement DHT bootstrapped on port ${dhtNode.port}")
+                    installNetChangeLogger(dhtNode)
+                    protectDhtSockets(dhtNode)
+
+                    // Tear down the old DHT off the loop thread (close()
+                    // does runBlocking internally).  Fire-and-forget.
+                    @Suppress("OPT_IN_USAGE")
+                    GlobalScope.launch(Dispatchers.IO) {
+                        try { oldDht.close() } catch (e: Exception) {
+                            Log.w(TAG, "old dht.close error: ${e.message}")
+                        }
+                    }
+
+                    consecutiveFailures = 0
+                    retryMs = INITIAL_RETRY_MS
+                    continue  // try connect again immediately on the new DHT
                 }
             }
 
@@ -364,7 +490,7 @@ class NospoonVpnService : VpnService() {
             retryMs = (retryMs * 2).coerceAtMost(MAX_RETRY_MS)
         }
 
-        tunReaderJob.cancel()
+        tunReaderJob?.cancel()
     }
 
     /**
@@ -376,6 +502,7 @@ class NospoonVpnService : VpnService() {
         coroutineScope {
             val tunOut = FileOutputStream(pfd.fileDescriptor)
             val decoder = FrameDecoder()
+            var packetCount = 0L
 
             val keepalive = launch {
                 while (isActive) {
@@ -387,6 +514,10 @@ class NospoonVpnService : VpnService() {
             try {
                 s.data.collect { chunk ->
                     decoder.feed(chunk) { pkt ->
+                        if (packetCount < 5L || packetCount % 200L == 0L) {
+                            Log.d(TAG, "stream→tun: ${pkt.size}-byte packet (#${packetCount + 1})")
+                        }
+                        packetCount++
                         try { tunOut.write(pkt) } catch (e: Exception) {
                             Log.w(TAG, "TUN write failed: ${e.message}")
                         }
@@ -458,5 +589,45 @@ class NospoonVpnService : VpnService() {
             out[i] = hex.substring(i * 2, i * 2 + 2).toInt(16).toByte()
         }
         return out
+    }
+
+    private fun bytesToHex(bytes: ByteArray): String {
+        val sb = StringBuilder(bytes.size * 2)
+        for (b in bytes) {
+            sb.append(String.format("%02x", b.toInt() and 0xFF))
+        }
+        return sb.toString()
+    }
+
+    /**
+     * Mark the DHT's UDP sockets as bypassing the VPN tunnel.  Called once
+     * after each [HyperDHT.awaitBootstrapped] (initial + restart-on-failure).
+     *
+     * Without this, sockets created after VpnService.Builder.establish()
+     * get steered through the VPN's routing rules.  DHT bootstrap (one-way
+     * chatter to public bootstrap nodes) often still works, but holepunch
+     * RTT requirements blow past timeouts and connect() fails with
+     * HOLEPUNCH_FAILED on every attempt.  This was the root cause of the
+     * "Wi-Fi → mobile-data switch + reconnect = -5 forever" symptom.
+     *
+     * We protect both sockets — the client (ephemeral outbound, used while
+     * firewalled — i.e. always on a phone) and the server (used if the
+     * node ever transitions out of firewalled state).
+     */
+    private fun protectDhtSockets(dhtNode: HyperDHT) {
+        val cFd = dhtNode.clientSocketFd
+        val sFd = dhtNode.serverSocketFd
+        if (cFd >= 0) {
+            val ok = protect(cFd)
+            Log.i(TAG, "protect(clientSocketFd=$cFd) → $ok")
+        } else {
+            Log.w(TAG, "clientSocketFd unavailable — protect skipped")
+        }
+        if (sFd >= 0) {
+            val ok = protect(sFd)
+            Log.i(TAG, "protect(serverSocketFd=$sFd) → $ok")
+        } else {
+            Log.w(TAG, "serverSocketFd unavailable — protect skipped")
+        }
     }
 }
