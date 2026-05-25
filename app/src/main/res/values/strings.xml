@@ -1,4 +1,119 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">nospoon</string>
+
+    <!-- Connection status -->
+    <string name="status_not_connected">Not connected</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_connecting_short">Connecting...</string>
+    <string name="status_reconnecting">Reconnecting…</string>
+    <string name="status_disconnected">Disconnected</string>
+    <string name="status_error_prefix">Error: %1$s</string>
+    <string name="status_tap_to_connect">Tap a configuration to connect</string>
+    <string name="status_establishing_tunnel">Establishing tunnel…</string>
+
+    <!-- Buttons -->
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+
+    <!-- Editor -->
+    <string name="add_configuration">Add Configuration</string>
+    <string name="edit_configuration">Edit Configuration</string>
+    <string name="import_config_from_qr">Import config from QR</string>
+    <string name="label_name">Name</string>
+    <string name="helper_name">A friendly name for this configuration</string>
+    <string name="label_server_pubkey">Server public key</string>
+    <string name="label_client_seed">Client seed</string>
+    <string name="label_client_ip">Client IP</string>
+    <string name="hint_64_hex">64 hex characters</string>
+    <string name="helper_cidr">VPN address in CIDR notation</string>
+    <string name="label_route_all_traffic">Route all traffic</string>
+    <string name="route_all_traffic_explanation">When enabled, all internet traffic goes through the VPN. When disabled, only traffic to the VPN subnet is routed.</string>
+
+    <!-- Empty state -->
+    <string name="empty_no_configs">No configurations</string>
+    <string name="empty_tap_plus">Tap + to add a VPN configuration</string>
+    <string name="configurations_header">Configurations</string>
+
+    <!-- Toasts / errors -->
+    <string name="pasted">Pasted</string>
+    <string name="scanned">Scanned</string>
+    <string name="config_imported">Config imported</string>
+    <string name="invalid_json_qr">Invalid JSON in QR code</string>
+    <string name="qr_missing_server">QR config missing \"server\" field</string>
+    <string name="vpn_permission_denied">VPN permission denied</string>
+    <string name="must_be_64_hex">Must be 64 hex characters</string>
+
+    <!-- Content descriptions -->
+    <string name="cd_add_configuration">Add configuration</string>
+    <string name="cd_edit_configuration">Edit configuration</string>
+    <string name="cd_scan_server_key">Scan server key</string>
+    <string name="cd_scan_client_seed">Scan client seed</string>
+    <string name="cd_scan_config">Scan full config QR</string>
+    <string name="cd_paste">Paste</string>
+
+    <!-- Notification -->
+    <string name="notif_channel_name">VPN Status</string>
+    <string name="notif_channel_desc">Shows VPN connection status</string>
+    <string name="notif_title">nospoon VPN</string>
+    <string name="notif_connecting_default">Connecting...</string>
+
+    <!-- Scanner -->
+    <string name="scan_qr_prompt">Scan QR code</string>
+
+    <!-- Delete confirmation -->
+    <string name="delete_configuration_title">Delete configuration?</string>
+    <string name="delete_configuration_message">Delete \"%1$s\"? This cannot be undone.</string>
+
+    <!-- Save confirmation -->
+    <string name="config_saved">Configuration saved</string>
+
+    <!-- VPN permission rationale -->
+    <string name="vpn_permission_title">Allow VPN connection?</string>
+    <string name="vpn_permission_message">nospoon needs permission to create a VPN tunnel. All traffic to the configured peer will be encrypted end-to-end. You can disconnect at any time from the notification or this screen.</string>
+    <string name="allow">Allow</string>
+
+    <!-- Error translations -->
+    <string name="err_holepunch_failed">Cannot reach server. Check that the server is online and the public key is correct.</string>
+    <string name="err_network_unreachable">No internet connection.</string>
+    <string name="err_permission_denied">VPN permission was denied. Grant it in settings to continue.</string>
+    <string name="err_invalid_config">Invalid configuration.</string>
+    <string name="err_generic">Connection error: %1$s</string>
+
+    <!-- State descriptions for accessibility (announced by TalkBack on the
+         small status indicator dots) -->
+    <string name="state_connected">Connected</string>
+    <string name="state_connecting">Connecting</string>
+    <string name="state_disconnected">Disconnected</string>
+
+    <!-- Import config from file (.jsonc / .json) -->
+    <string name="import_config_from_file">Import config from file</string>
+    <string name="file_read_failed">Could not read file</string>
+
+    <!-- CIDR validation -->
+    <string name="err_invalid_cidr">Use CIDR notation, e.g. 10.0.0.2/24</string>
+
+    <!-- Generate seed / show public key -->
+    <string name="generate_seed">Generate</string>
+    <string name="cd_generate_seed">Generate a random client seed</string>
+    <string name="label_public_key">Public key (share with server admin)</string>
+    <string name="public_key_placeholder">Enter seed above to derive</string>
+    <string name="copied_to_clipboard">Copied to clipboard</string>
+    <string name="cd_copy">Copy</string>
+
+    <!-- Top app bar / About -->
+    <string name="menu_about">About</string>
+    <string name="about_title">About nospoon</string>
+    <string name="about_message">nospoon — peer-to-peer VPN over HyperDHT.\n\nVersion %1$s\n\nNo central server, no public IP, no port forwarding.\nJust a key.</string>
+    <string name="about_github">GitHub</string>
+    <string name="ok">OK</string>
+    <string name="github_url" translatable="false">https://github.com/jjacke13/nospoon</string>
+
+    <!-- Snackbar Undo on delete -->
+    <string name="config_deleted">Configuration deleted</string>
+    <string name="undo">Undo</string>
 </resources>

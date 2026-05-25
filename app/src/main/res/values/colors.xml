@@ -1,5 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Light theme tokens (Material Theme Builder, blue azure seed) -->
+    <color name="md_theme_light_primary">#0061A4</color>
+    <color name="md_theme_light_onPrimary">#FFFFFF</color>
+    <color name="md_theme_light_primaryContainer">#D1E4FF</color>
+    <color name="md_theme_light_onPrimaryContainer">#001D36</color>
+
+    <color name="md_theme_light_secondary">#535F70</color>
+    <color name="md_theme_light_onSecondary">#FFFFFF</color>
+    <color name="md_theme_light_secondaryContainer">#D7E3F7</color>
+    <color name="md_theme_light_onSecondaryContainer">#101C2B</color>
+
+    <color name="md_theme_light_surface">#FCFCFF</color>
+    <color name="md_theme_light_onSurface">#1A1C1E</color>
+    <color name="md_theme_light_surfaceVariant">#DFE2EB</color>
+    <color name="md_theme_light_onSurfaceVariant">#43474E</color>
+    <color name="md_theme_light_outline">#73777F</color>
+    <color name="md_theme_light_surfaceContainer">#ECEEF4</color>
+    <color name="md_theme_light_surfaceContainerHigh">#E6E8EE</color>
+
+    <!-- Dark theme tokens (unchanged) -->
     <color name="md_theme_dark_primary">#9DCAFF</color>
     <color name="md_theme_dark_onPrimary">#003258</color>
     <color name="md_theme_dark_primaryContainer">#00497D</color>
@@ -21,7 +41,7 @@
     <!-- Launcher icon -->
     <color name="ic_launcher_background">#0D0D0D</color>
 
-    <!-- Status colors -->
+    <!-- Status colors (theme-independent semantic colors) -->
     <color name="status_connected">#4CAF50</color>
     <color name="status_connecting">#FFC107</color>
     <color name="status_disconnected">#757575</color>

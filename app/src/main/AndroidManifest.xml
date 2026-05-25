@@ -9,15 +9,23 @@
     <uses-permission android:name="android.permission.CAMERA" />
 
     <application
-        android:label="nospoon"
+        android:name=".NospoonApp"
+        android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.Nospoon"
-        android:forceDarkAllowed="true"
+        android:supportsRtl="true"
         android:extractNativeLibs="true">
+
+        <!-- Hint to the Play Store to install ML Kit barcode scanning UI
+             module at app-install time (otherwise downloaded on first scan). -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode_ui" />
 
         <activity
             android:name=".MainActivity"
+            android:theme="@style/Theme.Nospoon.SplashScreen"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">nospoon</string>
+
+    <!-- Κατάσταση σύνδεσης -->
+    <string name="status_not_connected">Δεν είναι συνδεδεμένο</string>
+    <string name="status_connected">Συνδέθηκε</string>
+    <string name="status_connecting">Σύνδεση…</string>
+    <string name="status_connecting_short">Σύνδεση...</string>
+    <string name="status_reconnecting">Επανασύνδεση…</string>
+    <string name="status_disconnected">Αποσυνδέθηκε</string>
+    <string name="status_error_prefix">Σφάλμα: %1$s</string>
+    <string name="status_tap_to_connect">Πατήστε μια διαμόρφωση για σύνδεση</string>
+    <string name="status_establishing_tunnel">Δημιουργία τούνελ…</string>
+
+    <!-- Κουμπιά -->
+    <string name="connect">Σύνδεση</string>
+    <string name="disconnect">Αποσύνδεση</string>
+    <string name="cancel">Άκυρο</string>
+    <string name="save">Αποθήκευση</string>
+    <string name="delete">Διαγραφή</string>
+
+    <!-- Επεξεργαστής -->
+    <string name="add_configuration">Προσθήκη Διαμόρφωσης</string>
+    <string name="edit_configuration">Επεξεργασία Διαμόρφωσης</string>
+    <string name="import_config_from_qr">Εισαγωγή διαμόρφωσης από QR</string>
+    <string name="label_name">Όνομα</string>
+    <string name="helper_name">Φιλικό όνομα για αυτή τη διαμόρφωση</string>
+    <string name="label_server_pubkey">Δημόσιο κλειδί διακομιστή</string>
+    <string name="label_client_seed">Σπόρος πελάτη (προαιρετικό)</string>
+    <string name="label_client_ip">IP πελάτη</string>
+    <string name="hint_64_hex">64 δεκαεξαδικοί χαρακτήρες</string>
+    <string name="helper_cidr">Διεύθυνση VPN σε σημειογραφία CIDR</string>
+    <string name="label_route_all_traffic">Δρομολόγηση όλης της κίνησης</string>
+    <string name="route_all_traffic_explanation">Όταν είναι ενεργοποιημένο, όλη η κίνηση internet περνά μέσω του VPN. Όταν είναι απενεργοποιημένο, δρομολογείται μόνο η κίνηση προς το υποδίκτυο του VPN.</string>
+
+    <!-- Κενή κατάσταση -->
+    <string name="empty_no_configs">Καμία διαμόρφωση</string>
+    <string name="empty_tap_plus">Πατήστε + για να προσθέσετε μια διαμόρφωση VPN</string>
+    <string name="configurations_header">Διαμορφώσεις</string>
+
+    <!-- Μηνύματα / σφάλματα -->
+    <string name="pasted">Επικολλήθηκε</string>
+    <string name="scanned">Σαρώθηκε</string>
+    <string name="config_imported">Η διαμόρφωση εισήχθη</string>
+    <string name="invalid_json_qr">Μη έγκυρο JSON στον κωδικό QR</string>
+    <string name="qr_missing_server">Λείπει το πεδίο \"server\" στη διαμόρφωση QR</string>
+    <string name="camera_permission_required">Απαιτείται άδεια κάμερας για σάρωση</string>
+    <string name="vpn_permission_denied">Η άδεια VPN απορρίφθηκε</string>
+    <string name="must_be_64_hex">Πρέπει να είναι 64 δεκαεξαδικοί χαρακτήρες</string>
+
+    <!-- Περιγραφές προσβασιμότητας -->
+    <string name="cd_add_configuration">Προσθήκη διαμόρφωσης</string>
+    <string name="cd_edit_configuration">Επεξεργασία διαμόρφωσης</string>
+    <string name="cd_scan_server_key">Σάρωση κλειδιού διακομιστή</string>
+    <string name="cd_scan_client_seed">Σάρωση σπόρου πελάτη</string>
+    <string name="cd_scan_config">Σάρωση πλήρους διαμόρφωσης QR</string>
+    <string name="cd_paste">Επικόλληση</string>
+
+    <!-- Ειδοποίηση -->
+    <string name="notif_channel_name">Κατάσταση VPN</string>
+    <string name="notif_channel_desc">Εμφανίζει την κατάσταση σύνδεσης VPN</string>
+    <string name="notif_title">nospoon VPN</string>
+    <string name="notif_connecting_default">Σύνδεση...</string>
+
+    <!-- Σαρωτής -->
+    <string name="scan_qr_prompt">Σαρώστε κωδικό QR</string>
+</resources>

@@ -5,6 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.TextView
+import androidx.core.view.ViewCompat
 import androidx.recyclerview.widget.RecyclerView
 
 class VpnConfigAdapter(
@@ -42,23 +43,33 @@ class VpnConfigAdapter(
         holder.ip.text = config.ip
 
         val isConnected = config.id == connectedConfigId
+        val ctx = holder.itemView.context
         when {
             isConnected && connectionStatus == "connected" -> {
                 holder.statusDot.setBackgroundResource(R.drawable.circle_status_connected)
-                holder.connectionStatusText.text = "Connected"
+                ViewCompat.setStateDescription(
+                    holder.statusDot, ctx.getString(R.string.state_connected)
+                )
+                holder.connectionStatusText.text = ctx.getString(R.string.status_connected)
                 holder.connectionStatusText.setTextColor(
-                    holder.itemView.context.getColor(R.color.status_connected)
+                    ctx.getColor(R.color.status_connected)
                 )
             }
             isConnected && connectionStatus == "connecting" -> {
                 holder.statusDot.setBackgroundResource(R.drawable.circle_status_connecting)
-                holder.connectionStatusText.text = "Connecting..."
+                ViewCompat.setStateDescription(
+                    holder.statusDot, ctx.getString(R.string.state_connecting)
+                )
+                holder.connectionStatusText.text = ctx.getString(R.string.status_connecting_short)
                 holder.connectionStatusText.setTextColor(
-                    holder.itemView.context.getColor(R.color.status_connecting)
+                    ctx.getColor(R.color.status_connecting)
                 )
             }
             else -> {
                 holder.statusDot.setBackgroundResource(R.drawable.circle_status_disconnected)
+                ViewCompat.setStateDescription(
+                    holder.statusDot, ctx.getString(R.string.state_disconnected)
+                )
                 holder.connectionStatusText.text = ""
             }
         }

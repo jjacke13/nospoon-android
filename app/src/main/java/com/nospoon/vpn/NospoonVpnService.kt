@@ -59,11 +59,7 @@ class NospoonVpnService : VpnService() {
         const val TAG = "NospoonVPN"
         const val ACTION_START = "com.nospoon.vpn.START"
         const val ACTION_STOP = "com.nospoon.vpn.STOP"
-        const val ACTION_QUERY = "com.nospoon.vpn.QUERY"
-        const val ACTION_STATUS = "com.nospoon.vpn.STATUS"
         const val EXTRA_CONFIG_JSON = "configJson"
-        const val EXTRA_STATUS_TEXT = "statusText"
-        const val EXTRA_CONNECTED = "connected"
         const val NOTIFICATION_ID = 1
         const val CHANNEL_ID = "nospoon_vpn"
 
@@ -99,13 +95,6 @@ class NospoonVpnService : VpnService() {
     private var vpnInterface: ParcelFileDescriptor? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
-    private var currentStatusText = "Disconnected"
-    private var currentConnected = false
-
-    // ─────────────────────────────────────────────────────────────────
-    // Service entry points
-    // ─────────────────────────────────────────────────────────────────
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
@@ -123,10 +112,6 @@ class NospoonVpnService : VpnService() {
             }
             ACTION_STOP -> {
                 cleanup()
-                return START_NOT_STICKY
-            }
-            ACTION_QUERY -> {
-                broadcastStatus(currentStatusText, currentConnected)
                 return START_NOT_STICKY
             }
         }
@@ -158,26 +143,35 @@ class NospoonVpnService : VpnService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("nospoon VPN")
+            .setContentTitle(getString(R.string.notif_title))
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_menu_compass)
+            .setSmallIcon(R.drawable.ic_stat_nospoon)
             .setContentIntent(tapIntent)
             .setOngoing(true)
             .setPriority(Notification.PRIORITY_LOW)
             .setCategory(Notification.CATEGORY_SERVICE)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Disconnect", stopIntent)
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                getString(R.string.disconnect),
+                stopIntent
+            )
             .build()
     }
 
     private fun startForegroundNotification() {
         val channel = NotificationChannel(
-            CHANNEL_ID, "VPN Status", NotificationManager.IMPORTANCE_LOW
+            CHANNEL_ID,
+            getString(R.string.notif_channel_name),
+            NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Shows VPN connection status"
+            description = getString(R.string.notif_channel_desc)
             setShowBadge(false)
         }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
-        startForeground(NOTIFICATION_ID, buildNotification("Connecting..."))
+        startForeground(
+            NOTIFICATION_ID,
+            buildNotification(getString(R.string.notif_connecting_default))
+        )
     }
 
     private fun updateNotification(text: String) {
@@ -185,21 +179,24 @@ class NospoonVpnService : VpnService() {
             .notify(NOTIFICATION_ID, buildNotification(text))
     }
 
-    private fun broadcastStatus(text: String, connected: Boolean) {
-        currentStatusText = text
-        currentConnected = connected
-        sendBroadcast(Intent(ACTION_STATUS).apply {
-            setPackage(packageName)
-            putExtra(EXTRA_STATUS_TEXT, text)
-            putExtra(EXTRA_CONNECTED, connected)
-        })
+    /**
+     * Publish a new state to [ConnectionStateRepository] and refresh the
+     * foreground notification to match. Safe to call from any thread —
+     * notification update is hopped to the main looper.
+     */
+    private fun setStatus(state: ConnectionState) {
+        ConnectionStateRepository.update(state)
+        val text = stateToText(state)
+        mainHandler.post { updateNotification(text) }
     }
 
-    private fun setStatus(text: String, connected: Boolean) {
-        mainHandler.post {
-            updateNotification(text)
-            broadcastStatus(text, connected)
-        }
+    /** Localized presentation string for a given [ConnectionState]. */
+    private fun stateToText(state: ConnectionState): String = when (state) {
+        ConnectionState.Disconnected -> getString(R.string.status_disconnected)
+        ConnectionState.Connecting -> getString(R.string.status_connecting_short)
+        ConnectionState.Connected -> getString(R.string.status_connected)
+        ConnectionState.Reconnecting -> getString(R.string.status_reconnecting)
+        is ConnectionState.Error -> state.message
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -213,7 +210,7 @@ class NospoonVpnService : VpnService() {
         }
 
         startForegroundNotification()
-        broadcastStatus("Connecting...", false)
+        setStatus(ConnectionState.Connecting)
 
         if (wakeLock == null) {
             val pm = getSystemService(PowerManager::class.java)
@@ -234,7 +231,7 @@ class NospoonVpnService : VpnService() {
                 runVpnLoop(config)
             } catch (e: Exception) {
                 Log.e(TAG, "VPN loop crashed: ${e.javaClass.simpleName}: ${e.message}", e)
-                broadcastStatus("Error: ${e.message}", false)
+                setStatus(ConnectionState.Error(translateError(e)))
             } finally {
                 mainHandler.post { cleanup() }
             }
@@ -272,7 +269,9 @@ class NospoonVpnService : VpnService() {
         val pfd = builder.establish()
         if (pfd == null) {
             Log.e(TAG, "Failed to establish VPN interface")
-            broadcastStatus("Error: VPN permission denied", false)
+            setStatus(ConnectionState.Error(
+                getString(R.string.status_error_prefix, getString(R.string.vpn_permission_denied))
+            ))
             return false
         }
         vpnInterface = pfd
@@ -438,7 +437,7 @@ class NospoonVpnService : VpnService() {
                     }
 
                     activeStream = s
-                    setStatus("Connected", true)
+                    setStatus(ConnectionState.Connected)
                     retryMs = INITIAL_RETRY_MS
 
                     forwardStreamToTun(s, vpnInterface!!)  // suspends until stream ends
@@ -455,7 +454,7 @@ class NospoonVpnService : VpnService() {
                 if (consecutiveFailures >= MAX_FAILURES_BEFORE_RESTART && isActive) {
                     Log.w(TAG, "$consecutiveFailures consecutive connect failures — " +
                             "rebuilding DHT (UDP socket likely on a dead interface)")
-                    setStatus("Reconnecting...", false)
+                    setStatus(ConnectionState.Reconnecting)
 
                     val oldDht = dhtNode
                     dhtNode = makeDht()
@@ -484,7 +483,7 @@ class NospoonVpnService : VpnService() {
 
             if (!isActive) break
 
-            setStatus("Reconnecting...", false)
+            setStatus(ConnectionState.Reconnecting)
             val jitter = (Math.random() * 1000).toLong()
             delay(retryMs + jitter)
             retryMs = (retryMs * 2).coerceAtMost(MAX_RETRY_MS)
@@ -565,7 +564,7 @@ class NospoonVpnService : VpnService() {
         wakeLock = null
 
         stopForeground(STOP_FOREGROUND_REMOVE)
-        broadcastStatus("Disconnected", false)
+        setStatus(ConnectionState.Disconnected)
         stopSelf()
     }
 
@@ -580,6 +579,30 @@ class NospoonVpnService : VpnService() {
         val network = ipInt and mask
         return "${(network shr 24) and 0xFF}.${(network shr 16) and 0xFF}." +
                 "${(network shr 8) and 0xFF}.${network and 0xFF}"
+    }
+
+    /**
+     * Map low-level connection failures to user-facing localized text.
+     * Pattern-matches well-known token strings emitted by hyperdht-cpp
+     * (e.g. "HOLEPUNCH_FAILED", "-5") and falls back to a generic
+     * "Connection error: <raw>" for anything we don't recognize.
+     */
+    private fun translateError(e: Throwable): String {
+        val raw = (e.message ?: "").lowercase()
+        val key = when {
+            "holepunch" in raw || "-5" in raw -> R.string.err_holepunch_failed
+            "unreachable" in raw || "no route" in raw || "enetunreach" in raw ->
+                R.string.err_network_unreachable
+            "permission" in raw -> R.string.err_permission_denied
+            "invalid" in raw && ("cidr" in raw || "config" in raw || "hex" in raw) ->
+                R.string.err_invalid_config
+            else -> null
+        }
+        return if (key != null) {
+            getString(R.string.status_error_prefix, getString(key))
+        } else {
+            getString(R.string.err_generic, e.message ?: e.javaClass.simpleName)
+        }
     }
 
     private fun hexToBytes(hex: String): ByteArray {

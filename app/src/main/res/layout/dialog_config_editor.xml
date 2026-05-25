@@ -1,12 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="?attr/colorSurface"
+    android:fillViewport="true">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="24dp"
-    android:background="@color/md_theme_dark_surface">
+    android:padding="24dp">
 
     <!-- Drag handle -->
     <View
@@ -14,17 +18,17 @@
         android:layout_height="4dp"
         android:layout_gravity="center_horizontal"
         android:layout_marginBottom="16dp"
-        android:background="@color/md_theme_dark_surfaceVariant" />
+        android:background="?attr/colorSurfaceVariant"
+        android:importantForAccessibility="no" />
 
     <!-- Title -->
     <TextView
         android:id="@+id/editorTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Add Configuration"
-        android:textColor="@color/md_theme_dark_onSurface"
-        android:textSize="20sp"
-        android:textStyle="bold"
+        android:text="@string/add_configuration"
+        android:textColor="?attr/colorOnSurface"
+        android:textAppearance="?attr/textAppearanceHeadlineSmall"
         android:layout_marginBottom="24dp" />
 
     <!-- Import full config from QR -->
@@ -32,8 +36,18 @@
         android:id="@+id/btnScanConfig"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Import config from QR"
+        android:text="@string/import_config_from_qr"
         app:icon="@android:drawable/ic_menu_camera"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Import full config from file (.json / .jsonc) -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnImportFile"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/import_config_from_file"
+        app:icon="@android:drawable/ic_menu_upload"
         style="@style/Widget.Material3.Button.OutlinedButton"
         android:layout_marginBottom="16dp" />
 
@@ -41,8 +55,8 @@
     <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Name"
-        app:helperText="A friendly name for this configuration"
+        android:hint="@string/label_name"
+        app:helperText="@string/helper_name"
         app:helperTextEnabled="true"
         style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
         android:layout_marginBottom="12dp">
@@ -51,17 +65,18 @@
             android:id="@+id/inputName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="text"
-            android:textSize="15sp" />
+            android:inputType="text" />
     </com.google.android.material.textfield.TextInputLayout>
 
     <!-- Server public key -->
     <TextView
+        android:id="@+id/labelServerKey"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Server public key"
-        android:textColor="@color/md_theme_dark_onSurfaceVariant"
-        android:textSize="13sp"
+        android:text="@string/label_server_pubkey"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:textAppearance="?attr/textAppearanceLabelMedium"
+        android:labelFor="@+id/inputServerKey"
         android:layout_marginBottom="4dp" />
 
     <LinearLayout
@@ -75,7 +90,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:hint="64 hex characters"
+            android:hint="@string/hint_64_hex"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
 
             <com.google.android.material.textfield.TextInputEditText
@@ -84,7 +99,6 @@
                 android:layout_height="wrap_content"
                 android:inputType="textNoSuggestions"
                 android:fontFamily="monospace"
-                android:textSize="14sp"
                 android:maxLines="1" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -95,8 +109,8 @@
             android:layout_marginStart="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@android:drawable/ic_menu_camera"
-            android:contentDescription="Scan server key"
-            app:tint="@color/md_theme_dark_primary" />
+            android:contentDescription="@string/cd_scan_server_key"
+            app:tint="?attr/colorPrimary" />
 
         <ImageButton
             android:id="@+id/btnPasteKey"
@@ -105,18 +119,39 @@
             android:layout_marginStart="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_paste"
-            android:contentDescription="Paste"
-            app:tint="@color/md_theme_dark_primary" />
+            android:contentDescription="@string/cd_paste"
+            app:tint="?attr/colorPrimary" />
     </LinearLayout>
 
     <!-- Client seed -->
-    <TextView
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Client seed (optional)"
-        android:textColor="@color/md_theme_dark_onSurfaceVariant"
-        android:textSize="13sp"
-        android:layout_marginBottom="4dp" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="4dp">
+
+        <TextView
+            android:id="@+id/labelClientSeed"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/label_client_seed"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textAppearance="?attr/textAppearanceLabelMedium"
+            android:labelFor="@+id/inputSeed" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnGenerateSeed"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/generate_seed"
+            android:contentDescription="@string/cd_generate_seed"
+            android:minHeight="36dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp" />
+    </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -129,7 +164,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:hint="64 hex characters"
+            android:hint="@string/hint_64_hex"
             app:endIconMode="password_toggle"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
 
@@ -139,7 +174,6 @@
                 android:layout_height="wrap_content"
                 android:inputType="textPassword"
                 android:fontFamily="monospace"
-                android:textSize="14sp"
                 android:maxLines="1" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -150,8 +184,8 @@
             android:layout_marginStart="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@android:drawable/ic_menu_camera"
-            android:contentDescription="Scan client seed"
-            app:tint="@color/md_theme_dark_primary" />
+            android:contentDescription="@string/cd_scan_client_seed"
+            app:tint="?attr/colorPrimary" />
 
         <ImageButton
             android:id="@+id/btnPasteSeed"
@@ -160,16 +194,57 @@
             android:layout_marginStart="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_paste"
-            android:contentDescription="Paste"
-            app:tint="@color/md_theme_dark_primary" />
+            android:contentDescription="@string/cd_paste"
+            app:tint="?attr/colorPrimary" />
+    </LinearLayout>
+
+    <!-- Public key (derived from seed; read-only) -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/label_public_key"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:textAppearance="?attr/textAppearanceLabelMedium"
+        android:layout_marginBottom="4dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp"
+        android:background="?attr/colorSurfaceContainerHigh"
+        android:padding="12dp">
+
+        <TextView
+            android:id="@+id/publicKeyDisplay"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/public_key_placeholder"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:fontFamily="monospace"
+            android:textIsSelectable="true" />
+
+        <ImageButton
+            android:id="@+id/btnCopyPublicKey"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_paste"
+            android:contentDescription="@string/cd_copy"
+            app:tint="?attr/colorOnSurfaceVariant"
+            android:visibility="gone" />
     </LinearLayout>
 
     <!-- Client IP -->
     <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Client IP"
-        app:helperText="VPN address in CIDR notation"
+        android:hint="@string/label_client_ip"
+        app:helperText="@string/helper_cidr"
         app:helperTextEnabled="true"
         style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
         android:layout_marginBottom="24dp">
@@ -181,7 +256,6 @@
             android:inputType="textNoSuggestions"
             android:fontFamily="monospace"
             android:text="10.0.0.2/24"
-            android:textSize="14sp"
             android:maxLines="1" />
     </com.google.android.material.textfield.TextInputLayout>
 
@@ -190,18 +264,18 @@
         android:id="@+id/switchFullTunnel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Route all traffic"
-        android:textColor="@color/md_theme_dark_onSurface"
-        android:textSize="15sp"
+        android:text="@string/label_route_all_traffic"
+        android:textColor="?attr/colorOnSurface"
+        android:textAppearance="?attr/textAppearanceBodyLarge"
         android:checked="false"
         android:layout_marginBottom="4dp" />
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="When enabled, all internet traffic goes through the VPN. When disabled, only traffic to the VPN subnet is routed."
-        android:textColor="@color/md_theme_dark_onSurfaceVariant"
-        android:textSize="12sp"
+        android:text="@string/route_all_traffic_explanation"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:textAppearance="?attr/textAppearanceBodySmall"
         android:layout_marginBottom="24dp" />
 
     <!-- Buttons -->
@@ -215,7 +289,7 @@
             android:id="@+id/btnDelete"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Delete"
+            android:text="@string/delete"
             android:textColor="@color/status_error"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_marginEnd="8dp"
@@ -230,7 +304,7 @@
             android:id="@+id/btnCancel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Cancel"
+            android:text="@string/cancel"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_marginEnd="8dp" />
 
@@ -238,8 +312,10 @@
             android:id="@+id/btnSave"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Save"
+            android:text="@string/save"
             style="@style/Widget.Material3.Button" />
     </LinearLayout>
 
 </LinearLayout>
+
+</androidx.core.widget.NestedScrollView>
