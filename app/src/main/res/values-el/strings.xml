@@ -27,7 +27,7 @@
     <string name="label_name">Όνομα</string>
     <string name="helper_name">Φιλικό όνομα για αυτή τη διαμόρφωση</string>
     <string name="label_server_pubkey">Δημόσιο κλειδί διακομιστή</string>
-    <string name="label_client_seed">Σπόρος πελάτη (προαιρετικό)</string>
+    <string name="label_client_seed">Ιδιωτικό κλειδί</string>
     <string name="label_client_ip">IP πελάτη</string>
     <string name="hint_64_hex">64 δεκαεξαδικοί χαρακτήρες</string>
     <string name="helper_cidr">Διεύθυνση VPN σε σημειογραφία CIDR</string>
@@ -45,7 +45,6 @@
     <string name="config_imported">Η διαμόρφωση εισήχθη</string>
     <string name="invalid_json_qr">Μη έγκυρο JSON στον κωδικό QR</string>
     <string name="qr_missing_server">Λείπει το πεδίο \"server\" στη διαμόρφωση QR</string>
-    <string name="camera_permission_required">Απαιτείται άδεια κάμερας για σάρωση</string>
     <string name="vpn_permission_denied">Η άδεια VPN απορρίφθηκε</string>
     <string name="must_be_64_hex">Πρέπει να είναι 64 δεκαεξαδικοί χαρακτήρες</string>
 
@@ -53,7 +52,7 @@
     <string name="cd_add_configuration">Προσθήκη διαμόρφωσης</string>
     <string name="cd_edit_configuration">Επεξεργασία διαμόρφωσης</string>
     <string name="cd_scan_server_key">Σάρωση κλειδιού διακομιστή</string>
-    <string name="cd_scan_client_seed">Σάρωση σπόρου πελάτη</string>
+    <string name="cd_scan_client_seed">Σάρωση ιδιωτικού κλειδιού</string>
     <string name="cd_scan_config">Σάρωση πλήρους διαμόρφωσης QR</string>
     <string name="cd_paste">Επικόλληση</string>
 
@@ -65,4 +64,54 @@
 
     <!-- Σαρωτής -->
     <string name="scan_qr_prompt">Σαρώστε κωδικό QR</string>
+
+    <!-- Επιβεβαίωση διαγραφής -->
+    <string name="delete_configuration_title">Διαγραφή διαμόρφωσης;</string>
+    <string name="delete_configuration_message">Διαγραφή \"%1$s\"; Δεν αναιρείται.</string>
+
+    <!-- Επιβεβαίωση αποθήκευσης -->
+    <string name="config_saved">Η διαμόρφωση αποθηκεύτηκε</string>
+
+    <!-- Επεξήγηση άδειας VPN -->
+    <string name="vpn_permission_title">Να επιτραπεί η σύνδεση VPN;</string>
+    <string name="vpn_permission_message">Το nospoon χρειάζεται άδεια για να δημιουργήσει τούνελ VPN. Όλη η κίνηση προς τον διαμορφωμένο peer θα είναι κρυπτογραφημένη end-to-end. Μπορείτε να αποσυνδεθείτε ανά πάσα στιγμή από την ειδοποίηση ή από αυτή την οθόνη.</string>
+    <string name="allow">Επιτρέπω</string>
+
+    <!-- Μεταφράσεις σφαλμάτων -->
+    <string name="err_holepunch_failed">Δεν μπορεί να επιτευχθεί σύνδεση με τον διακομιστή. Ελέγξτε ότι ο διακομιστής λειτουργεί και ότι το δημόσιο κλειδί είναι σωστό.</string>
+    <string name="err_network_unreachable">Δεν υπάρχει σύνδεση internet.</string>
+    <string name="err_permission_denied">Η άδεια VPN απορρίφθηκε. Παραχωρήστε την στις ρυθμίσεις για να συνεχίσετε.</string>
+    <string name="err_invalid_config">Μη έγκυρη διαμόρφωση.</string>
+    <string name="err_generic">Σφάλμα σύνδεσης: %1$s</string>
+
+    <!-- Περιγραφές κατάστασης για TalkBack -->
+    <string name="state_connected">Συνδεδεμένο</string>
+    <string name="state_connecting">Σύνδεση</string>
+    <string name="state_disconnected">Αποσυνδεδεμένο</string>
+
+    <!-- Εισαγωγή διαμόρφωσης από αρχείο -->
+    <string name="import_config_from_file">Εισαγωγή διαμόρφωσης από αρχείο</string>
+    <string name="file_read_failed">Δεν ήταν δυνατή η ανάγνωση του αρχείου</string>
+
+    <!-- Επικύρωση CIDR -->
+    <string name="err_invalid_cidr">Χρησιμοποιήστε σημειογραφία CIDR, π.χ. 10.0.0.2/24</string>
+
+    <!-- Δημιουργία ιδιωτικού κλειδιού / εμφάνιση δημόσιου κλειδιού -->
+    <string name="generate_seed">Δημιουργία</string>
+    <string name="cd_generate_seed">Δημιουργία τυχαίου ιδιωτικού κλειδιού</string>
+    <string name="label_public_key">Δημόσιο κλειδί (κοινοποιήστε στον διαχειριστή διακομιστή)</string>
+    <string name="public_key_placeholder">Εισάγετε ιδιωτικό κλειδί παραπάνω για παραγωγή</string>
+    <string name="copied_to_clipboard">Αντιγράφηκε στο πρόχειρο</string>
+    <string name="cd_copy">Αντιγραφή</string>
+
+    <!-- Άνω γραμμή / Σχετικά -->
+    <string name="menu_about">Σχετικά</string>
+    <string name="about_title">Σχετικά με το nospoon</string>
+    <string name="about_message">nospoon — peer-to-peer VPN over HyperDHT.\n\nΈκδοση %1$s\n\nΧωρίς κεντρικό διακομιστή, δημόσια IP ή προώθηση θυρών.\nΜόνο ένα κλειδί.</string>
+    <string name="about_github">GitHub</string>
+    <string name="ok">ΟΚ</string>
+
+    <!-- Αναίρεση διαγραφής -->
+    <string name="config_deleted">Η διαμόρφωση διαγράφηκε</string>
+    <string name="undo">Αναίρεση</string>
 </resources>
