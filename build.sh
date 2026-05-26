@@ -115,16 +115,18 @@ download_binary() {
     log_info "Installed: $BINARY_PATH ($(stat -c%s "$BINARY_PATH" 2>/dev/null || stat -f%z "$BINARY_PATH") bytes)"
 }
 
-# Build debug APK
-build_apk() {
-    log_info "Building debug APK..."
-
-    # Generate gradle wrapper if not present
+ensure_wrapper() {
     if [ ! -f "gradlew" ]; then
         log_info "Generating Gradle wrapper..."
         gradle wrapper
         chmod +x gradlew
     fi
+}
+
+# Build debug APK
+build_apk() {
+    log_info "Building debug APK..."
+    ensure_wrapper
 
     ./gradlew assembleDebug
 
@@ -140,14 +142,103 @@ build_apk() {
     fi
 }
 
+# Resolve keystore password without writing it to disk.
+#
+# Precedence:
+#   1. $NOSPOON_KEYSTORE_PASSWORD already in env → use it
+#   2. `pass` available + entry exists → `pass show $NOSPOON_PASS_ENTRY`
+#      (triggers GPG decrypt; with a YubiKey-backed key, that means
+#      YubiKey touch + PIN)
+#   3. Interactive prompt (read -s)
+#
+# Default pass entry: "android/nospoon-upload"
+# Override via:  NOSPOON_PASS_ENTRY=foo/bar ./build.sh release
+resolve_keystore_password() {
+    if [ -n "$NOSPOON_KEYSTORE_PASSWORD" ]; then
+        log_info "Using NOSPOON_KEYSTORE_PASSWORD from environment."
+        return 0
+    fi
+
+    local pass_entry="${NOSPOON_PASS_ENTRY:-android/nospoon-upload}"
+    if command -v pass >/dev/null 2>&1 && pass show "$pass_entry" >/dev/null 2>&1; then
+        log_info "Fetching keystore password from pass ($pass_entry)..."
+        # Take first line only — pass entries can have metadata lines below
+        # the password; $(...) only strips trailing newlines, not embedded ones.
+        NOSPOON_KEYSTORE_PASSWORD="$(pass show "$pass_entry" | head -n1)"
+        export NOSPOON_KEYSTORE_PASSWORD
+        return 0
+    fi
+
+    log_warn "No env var, no matching pass entry ($pass_entry)."
+    log_warn "Prompting interactively (Ctrl-C to abort)."
+    read -rsp "Keystore password: " NOSPOON_KEYSTORE_PASSWORD
+    echo
+    export NOSPOON_KEYSTORE_PASSWORD
+}
+
+# Build release AAB for Play Store upload.
+#
+# Reads from android/keystore.properties:
+#   storeFile=/absolute/path/to/upload.jks
+#   keyAlias=upload
+#
+# Reads passwords from env vars (NOSPOON_KEYSTORE_PASSWORD /
+# NOSPOON_KEY_PASSWORD), pulled from `pass` if not already set.
+# See docs/PLAYSTORE.md for the full workflow.
+build_aab() {
+    log_info "Building release AAB..."
+    ensure_wrapper
+
+    if [ ! -f "keystore.properties" ]; then
+        log_warn "keystore.properties not found — AAB will be unsigned."
+        log_warn "See docs/PLAYSTORE.md for keystore + properties setup."
+    else
+        resolve_keystore_password
+    fi
+
+    ./gradlew bundleRelease
+
+    # Scrub the password from this shell process before going further.
+    unset NOSPOON_KEYSTORE_PASSWORD NOSPOON_KEY_PASSWORD
+
+    AAB_PATH="app/build/outputs/bundle/release/app-release.aab"
+    if [ -f "$AAB_PATH" ]; then
+        log_info "Build successful!"
+        log_info "AAB: $(realpath $AAB_PATH)"
+        cp "$AAB_PATH" ./nospoon-release.aab
+        log_info "Copied to: $(realpath ./nospoon-release.aab)"
+        log_info "Size: $(stat -c%s ./nospoon-release.aab 2>/dev/null || stat -f%z ./nospoon-release.aab) bytes"
+        log_info ""
+        log_info "Next: upload nospoon-release.aab to Play Console."
+        log_info "See docs/PLAYSTORE.md for the full release checklist."
+    else
+        log_error "AAB not found at $AAB_PATH"
+        exit 1
+    fi
+}
+
 # Main
 main() {
     log_info "nospoon Android build script"
     log_info "================================"
 
+    local mode="${1:-debug}"
+
     check_env
     download_binary
-    build_apk
+
+    case "$mode" in
+        debug)
+            build_apk
+            ;;
+        release)
+            build_aab
+            ;;
+        *)
+            log_error "Unknown mode: $mode (expected: debug | release)"
+            exit 1
+            ;;
+    esac
 
     log_info "Done!"
 }

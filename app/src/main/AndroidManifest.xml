@@ -14,8 +14,7 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.Nospoon"
-        android:supportsRtl="true"
-        android:extractNativeLibs="true">
+        android:supportsRtl="true">
 
         <!-- Hint to the Play Store to install ML Kit barcode scanning UI
              module at app-install time (otherwise downloaded on first scan). -->
@@ -39,6 +38,12 @@
             android:foregroundServiceType="specialUse"
             android:exported="false"
             android:stopWithTask="false">
+            <!-- Required by Play Store for SDK 34+ apps using
+                 FOREGROUND_SERVICE_SPECIAL_USE. Justification text is
+                 shown to reviewers. -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintains an active peer-to-peer encrypted VPN tunnel. The service must persist while the tunnel is established so it can forward IP packets between the local TUN device and the encrypted HyperDHT stream to a user-configured peer." />
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>

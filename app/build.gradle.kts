@@ -1,7 +1,37 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+// Signing config — paths come from android/keystore.properties (gitignored),
+// passwords come from environment variables (sourced from `pass` or another
+// secret store at build time; never written to disk).
+//
+// keystore.properties format (non-secret, gitignored):
+//   storeFile=/absolute/path/to/upload.jks
+//   keyAlias=upload
+//
+// Required env vars at build time:
+//   NOSPOON_KEYSTORE_PASSWORD   — keystore password (PKCS12 single password)
+//   NOSPOON_KEY_PASSWORD        — key entry password (defaults to keystore pw)
+//
+// See docs/PLAYSTORE.md for the `pass`+YubiKey workflow.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        load(FileInputStream(keystorePropertiesFile))
+    }
+}
+
+val keystorePasswordEnv: String? = System.getenv("NOSPOON_KEYSTORE_PASSWORD")
+val keyPasswordEnv: String? = System.getenv("NOSPOON_KEY_PASSWORD") ?: keystorePasswordEnv
+val hasSigningConfig: Boolean =
+    keystorePropertiesFile.exists() &&
+    keystoreProperties["storeFile"] != null &&
+    !keystorePasswordEnv.isNullOrEmpty()
 
 android {
     namespace = "com.nospoon.vpn"
@@ -22,9 +52,34 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            if (hasSigningConfig) {
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystorePasswordEnv
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keyPasswordEnv
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 minify + resource shrink for size reduction. Kotlin
+            // coroutines, ML Kit code-scanner, JNI methods, and the
+            // hyperdht-cpp Kotlin wrapper are preserved by
+            // proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            // Falls back to unsigned output if env / properties missing;
+            // ./gradlew assembleRelease still succeeds for CI verification.
+            if (hasSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
