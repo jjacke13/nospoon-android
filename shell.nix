@@ -6,8 +6,8 @@
 
 let
   androidComposition = pkgs.androidenv.composeAndroidPackages {
-    platformVersions = [ "35" ];
-    buildToolsVersions = [ "35.0.0" ];
+    platformVersions = [ "36" ];
+    buildToolsVersions = [ "36.0.0" ];
     includeNDK = false;
     includeEmulator = false;
     includeSystemImages = false;
@@ -31,7 +31,7 @@ pkgs.mkShell {
   JAVA_HOME = "${pkgs.jdk17}";
 
   # Use Nix-provided AAPT2 instead of Gradle's dynamically-linked download
-  GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${androidSdk}/libexec/android-sdk/build-tools/35.0.0/aapt2";
+  GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${androidSdk}/libexec/android-sdk/build-tools/36.0.0/aapt2";
 
   shellHook = ''
     echo "nospoon Android dev shell"

@@ -217,6 +217,44 @@ build_aab() {
     fi
 }
 
+
+# Build signed release APK (sideload / direct install).
+#
+# Same signing path as build_aab — keystore.properties for paths, password
+# from env / pass / prompt. Play wants the AAB; this is for handing a file
+# to someone directly (testers, a phone with no Play access).
+build_apk_release() {
+    log_info "Building release APK..."
+    ensure_wrapper
+
+    if [ ! -f "keystore.properties" ]; then
+        log_warn "keystore.properties not found — APK will be unsigned."
+        log_warn "See docs/PLAYSTORE.md for keystore + properties setup."
+    else
+        resolve_keystore_password
+    fi
+
+    ./gradlew assembleRelease
+
+    # Scrub the password from this shell process before going further.
+    unset NOSPOON_KEYSTORE_PASSWORD NOSPOON_KEY_PASSWORD
+
+    APK_PATH="app/build/outputs/apk/release/app-release.apk"
+    if [ -f "$APK_PATH" ]; then
+        log_info "Build successful!"
+        log_info "APK: $(realpath $APK_PATH)"
+        cp "$APK_PATH" ./nospoon-release.apk
+        log_info "Copied to: $(realpath ./nospoon-release.apk)"
+        log_info "Size: $(stat -c%s ./nospoon-release.apk 2>/dev/null || stat -f%z ./nospoon-release.apk) bytes"
+        log_info ""
+        log_info "Install with: adb install -r nospoon-release.apk"
+    else
+        log_error "APK not found at $APK_PATH"
+        log_error "(If unsigned, gradle writes app-release-unsigned.apk instead.)"
+        exit 1
+    fi
+}
+
 # Main
 main() {
     log_info "nospoon Android build script"
@@ -231,11 +269,14 @@ main() {
         debug)
             build_apk
             ;;
+        release-apk)
+            build_apk_release
+            ;;
         release)
             build_aab
             ;;
         *)
-            log_error "Unknown mode: $mode (expected: debug | release)"
+            log_error "Unknown mode: $mode (expected: debug | release | release-apk)"
             exit 1
             ;;
     esac
