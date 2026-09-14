@@ -9,7 +9,7 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
-OUT="../docs/assets/screenshots/$1.png"
+OUT="docs/assets/screenshots/$1.png"
 mkdir -p "$(dirname "$OUT")"
 adb exec-out screencap -p > "$OUT"
 echo "saved: $OUT  ($(stat -c%s "$OUT") bytes, $(identify -format '%wx%h' "$OUT" 2>/dev/null || echo 'use file/identify to check dims'))"

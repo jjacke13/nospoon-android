@@ -1,7 +1,11 @@
 # nospoon Android
 
-Android VPN client for nospoon. Kotlin app on top of hyperdht-cpp through a
-JNI bridge — no JavaScript runtime, no separate native binary.
+Android VPN client for [nospoon](https://github.com/jjacke13/nospoon). Kotlin
+app on top of hyperdht-cpp through a JNI bridge — no JavaScript runtime, no
+separate native binary.
+
+The server, the desktop clients, the wire protocol and the config-format spec
+live in the nospoon repo; this repo is only the app.
 
 ## Architecture
 
@@ -57,8 +61,7 @@ No NDK. The native code is prebuilt.
 ## Build
 
 ```bash
-nix develop .#android       # from the repo root (or `cd android && nix-shell`)
-cd android
+nix-shell
 ./build.sh                  # = ./build.sh debug
 ```
 
@@ -80,8 +83,9 @@ so it doesn't download a dynamically linked one that can't run on NixOS.
    - `NOSPOON_FORCE_DOWNLOAD=1` — re-download.
    - `HYPERDHT_CI_BRANCH=<branch>` — pull from another branch.
    - "Newest successful run" is **not** the same as the commit pinned in
-     `cpp/CMakeLists.txt`. If the last CI run is older than the pin, trigger
-     one first: `gh workflow run "Build & Release" --repo jjacke13/hyperdht-cpp --ref main`.
+     `cpp/CMakeLists.txt` in the nospoon repo. If the last CI run is older than
+     the pin, trigger one first:
+     `gh workflow run "Build & Release" --repo jjacke13/hyperdht-cpp --ref main`.
 3. Gradle, by mode:
 
 | mode | gradle task | output | signed |
@@ -95,7 +99,7 @@ builds nothing else.
 
 ### Signing (`release`, `release-apk`)
 
-`android/keystore.properties` (gitignored) holds **paths only**:
+`keystore.properties` (gitignored) holds **paths only**:
 
 ```
 storeFile=/absolute/path/to/nospoon-upload.jks
@@ -114,7 +118,7 @@ creation and the Play Console checklist: `docs/PLAYSTORE.md`.
 
 ### Android Studio
 
-Run `./build.sh` once so `jniLibs/` is populated, then open `android/` and
+Run `./build.sh` once so `jniLibs/` is populated, then open this directory and
 build normally. Studio does not fetch the JNI lib.
 
 ## Traps
@@ -177,7 +181,7 @@ Generate a QR from a config:
 qrencode -t ANSIUTF8 < config.json      # strip JSONC comments first — the scanner wants plain JSON
 ```
 
-`scripts/mkclients.sh` at the repo root generates per-client configs in bulk
+`scripts/mkclients.sh` in the nospoon repo generates per-client configs in bulk
 and patches the server's `peers` map; pipe each one through `qrencode` as
 above.
 

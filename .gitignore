@@ -18,3 +18,12 @@ app/src/main/jniLibs/
 
 # Build output
 *.apk
+*.aab
+
+# Signing — NEVER commit
+keystore.properties
+app/*.jks
+app/*.keystore
+
+# Internal release notes — local-only, same as in the nospoon monorepo
+docs/PLAYSTORE.md
