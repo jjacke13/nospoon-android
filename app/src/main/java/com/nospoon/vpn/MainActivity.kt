@@ -255,6 +255,7 @@ class MainActivity : AppCompatActivity(),
 
     private fun launchScanner() {
         scannerLauncher.launch(ScanOptions()
+            .setCaptureActivity(QrScannerActivity::class.java)
             .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
             .setPrompt(getString(R.string.scan_qr_prompt))
             .setOrientationLocked(false)

@@ -21,10 +21,13 @@
 
         <activity
             android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            tools:node="remove" />
+        <activity
+            android:name=".QrScannerActivity"
             android:exported="false"
             android:screenOrientation="sensorPortrait"
-            android:stateNotNeeded="false"
-            tools:replace="android:screenOrientation,android:stateNotNeeded" />
+            android:theme="@style/zxing_CaptureTheme"
+            android:windowSoftInputMode="stateAlwaysHidden" />
 
         <activity
             android:name=".MainActivity"

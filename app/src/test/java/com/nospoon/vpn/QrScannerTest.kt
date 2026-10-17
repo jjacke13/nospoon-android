@@ -4,6 +4,12 @@ import android.app.Activity
 import android.app.Application
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.graphics.Rect
+import android.view.ViewGroup
+import android.view.WindowManager
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import android.view.View
 import android.widget.EditText
 import com.google.zxing.DecodeHintType
@@ -11,7 +17,6 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.MultiFormatWriter
 import com.google.zxing.RGBLuminanceSource
 import com.google.zxing.client.android.Intents
-import com.journeyapps.barcodescanner.CaptureActivity
 import com.journeyapps.barcodescanner.DecoratedBarcodeView
 import org.junit.After
 import org.junit.Assert.*
@@ -51,10 +56,13 @@ class QrScannerTest {
         assertFalse(scan.intent.getBooleanExtra(Intents.Scan.BEEP_ENABLED, true))
         assertFalse(scan.intent.getBooleanExtra(Intents.Scan.BARCODE_IMAGE_ENABLED, true))
         val info = controller.get().packageManager.getActivityInfo(scan.intent.component!!, 0)
+        assertEquals(QrScannerActivity::class.java.name, info.name)
+        assertEquals(com.google.zxing.client.android.R.style.zxing_CaptureTheme, info.theme)
+        assertEquals(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN, info.softInputMode)
         assertFalse(info.exported)
         assertEquals(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT, info.screenOrientation)
 
-        val capture = Robolectric.buildActivity(CaptureActivity::class.java, scan.intent).create()
+        val capture = Robolectric.buildActivity(QrScannerActivity::class.java, scan.intent).create()
         try {
             val view = capture.get().findViewById<DecoratedBarcodeView>(
                 com.google.zxing.client.android.R.id.zxing_barcode_scanner)
@@ -63,6 +71,32 @@ class QrScannerTest {
                 assertEquals(payload, decoder.decode(image(payload, BarcodeFormat.QR_CODE))?.text)
             }
             assertNull(decoder.decode(image("1234567890", BarcodeFormat.CODE_128)))
+        } finally {
+            capture.destroy()
+        }
+    }
+
+    @Test
+    @Config(sdk = [35])
+    fun scannerPromptStaysAboveNavigationBarWithoutAccumulatingInsets() {
+        val capture = Robolectric.buildActivity(QrScannerActivity::class.java, launch(R.id.btnScanKey).intent).create()
+        try {
+            val content = capture.get().findViewById<ViewGroup>(android.R.id.content)
+            for (bottom in listOf(32, 48, 32)) {
+                ViewCompat.dispatchApplyWindowInsets(content, WindowInsetsCompat.Builder()
+                    .setInsets(WindowInsetsCompat.Type.systemBars(), Insets.of(8, 24, 8, bottom))
+                    .setInsets(WindowInsetsCompat.Type.displayCutout(), Insets.of(0, 40, 0, 0)).build())
+                content.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(2400, View.MeasureSpec.EXACTLY))
+                content.layout(0, 0, 1080, 2400)
+                val prompt = capture.get().findViewById<View>(com.google.zxing.client.android.R.id.zxing_status_view)
+                val bounds = Rect(0, 0, prompt.width, prompt.height)
+                content.offsetDescendantRectToMyCoords(prompt, bounds)
+                assertFalse(bounds.isEmpty)
+                assertTrue("Prompt must stay above system navigation", bounds.bottom <= content.height - bottom)
+                assertEquals(bottom, content.paddingBottom)
+                assertEquals(40, content.paddingTop)
+            }
         } finally {
             capture.destroy()
         }
