@@ -103,8 +103,13 @@ class ConfigEditorBottomSheet : BottomSheetDialogFragment() {
         }
 
         val config = VpnConfig.fromJson(json)
+        if (config.mtu !in 1..Framing.MAX_FRAME_SIZE) {
+            Toast.makeText(context, R.string.err_invalid_config, Toast.LENGTH_LONG).show()
+            return
+        }
+        requireArguments().putInt(ARG_MTU, config.mtu)
         inputServerKey.setText(config.server)
-        config.seed?.let { inputSeed.setText(it) }
+        inputSeed.setText(config.seed.orEmpty())
         inputIpField?.setText(config.ip)
         fullTunnelSwitch?.isChecked = config.fullTunnel
 
@@ -117,6 +122,7 @@ class ConfigEditorBottomSheet : BottomSheetDialogFragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
+        if (arguments == null) arguments = Bundle()
         val view = inflater.inflate(R.layout.dialog_config_editor, container, false)
 
         val title = view.findViewById<TextView>(R.id.editorTitle)
