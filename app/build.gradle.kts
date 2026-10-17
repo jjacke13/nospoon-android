@@ -66,7 +66,7 @@ android {
     buildTypes {
         release {
             // R8 minify + resource shrink for size reduction. Kotlin
-            // coroutines, ML Kit code-scanner, JNI methods, and the
+            // coroutines, JNI methods, and the
             // hyperdht-cpp Kotlin wrapper are preserved by
             // proguard-rules.pro.
             isMinifyEnabled = true
@@ -128,8 +128,6 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("androidx.fragment:fragment-ktx:1.8.5")
 
-    // QR code scanning — Google Code Scanner (standalone, includes camera UI).
-    // Smaller than ZXing, async module download on first use, no runtime
-    // camera permission needed (Play Services owns the prompt).
-    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    // Bundled, Apache-2.0 scanner; no Play Services or first-use download.
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 }

@@ -177,12 +177,12 @@ The editor has three scan buttons (`ConfigEditorBottomSheet.ScanTarget`):
 field. "Import from file" opens a SAF document picker and feeds the file
 through the same full-config path.
 
-Scanner: `play-services-code-scanner` (ML Kit's standalone Google Code
-Scanner). Chosen because it ships its own camera UI and handles the CAMERA
-permission inside Play Services — no runtime permission request, smaller than
-ZXing. The first scan after install may pause while Play Services downloads
-the barcode-ui module. This is a Google Play Services dependency; the app is
-not GMS-free.
+Scanner: bundled [ZXing Android Embedded](https://github.com/journeyapps/zxing-android-embedded)
+(Apache-2.0), restricted to **QR codes** with a portrait viewfinder. No Google
+Play Services, external scanner app or first-use module download is needed.
+The app requests camera permission when scanning; manual entry and file import
+remain available if permission is denied. Scans do not save camera images or
+play a beep.
 
 Generate a QR from a config:
 

@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -27,9 +28,9 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.snackbar.Snackbar
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
-import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import com.google.zxing.client.android.Intents
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity(),
@@ -39,6 +40,7 @@ class MainActivity : AppCompatActivity(),
     companion object {
         const val VPN_REQUEST_CODE = 1
         const val NOTIFICATION_PERMISSION_CODE = 2
+        private const val STATE_SCAN_TARGET = "scan_target"
     }
 
     private lateinit var configList: RecyclerView
@@ -67,6 +69,17 @@ class MainActivity : AppCompatActivity(),
 
     // Scan state
     private var pendingScanTarget: ConfigEditorBottomSheet.ScanTarget? = null
+
+    private val scannerLauncher = registerForActivityResult(ScanContract()) { result ->
+        val target = pendingScanTarget
+        pendingScanTarget = null
+        if (result.originalIntent?.getBooleanExtra(Intents.Scan.MISSING_CAMERA_PERMISSION, false) == true) {
+            Toast.makeText(this, R.string.scan_camera_permission, Toast.LENGTH_LONG).show()
+        }
+        if (target != null && result.contents != null && result.formatName == ScanOptions.QR_CODE) {
+            currentSheet?.setScannedText(target, result.contents.trim())
+        }
+    }
 
     // Picker for SAF-based config import. Registered on the Activity so it
     // survives BottomSheet lifecycle transitions.
@@ -103,6 +116,12 @@ class MainActivity : AppCompatActivity(),
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        pendingScanTarget = savedInstanceState?.getString(STATE_SCAN_TARGET)?.let { name ->
+            ConfigEditorBottomSheet.ScanTarget.entries.find { it.name == name }
+        }
+        currentSheet = supportFragmentManager.findFragmentByTag("config_editor") as? ConfigEditorBottomSheet
+        currentSheet?.listener = this
 
         repository = VpnConfigRepository(this)
 
@@ -235,29 +254,18 @@ class MainActivity : AppCompatActivity(),
     }
 
     private fun launchScanner() {
-        // ML Kit's standalone scanner ships its own camera UI and handles
-        // CAMERA permission internally via Play Services — no runtime
-        // request needed from us. The first scan after install may pause
-        // briefly while Play Services downloads the barcode-ui module.
-        val options = GmsBarcodeScannerOptions.Builder()
-            .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
-            .build()
-        GmsBarcodeScanning.getClient(this, options)
-            .startScan()
-            .addOnSuccessListener { barcode ->
-                val raw = barcode.rawValue ?: return@addOnSuccessListener
-                val target = pendingScanTarget ?: return@addOnSuccessListener
-                currentSheet?.setScannedText(target, raw.trim())
-                pendingScanTarget = null
-            }
-            .addOnCanceledListener {
-                Log.d("Scan", "scan cancelled")
-                pendingScanTarget = null
-            }
-            .addOnFailureListener { e ->
-                Log.w("Scan", "scan failed: ${e.message}", e)
-                pendingScanTarget = null
-            }
+        scannerLauncher.launch(ScanOptions()
+            .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+            .setPrompt(getString(R.string.scan_qr_prompt))
+            .setOrientationLocked(false)
+            .setBeepEnabled(false)
+            .setBarcodeImageEnabled(false)
+            .addExtra(Intents.Scan.SHOW_MISSING_CAMERA_PERMISSION_DIALOG, false))
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(STATE_SCAN_TARGET, pendingScanTarget?.name)
+        super.onSaveInstanceState(outState)
     }
 
     // --- Config editor ---
@@ -303,8 +311,7 @@ class MainActivity : AppCompatActivity(),
         // MUST call super so AndroidX ActivityResultRegistry dispatches
         // results to registerForActivityResult() callbacks (file picker etc.)
         super.onActivityResult(requestCode, resultCode, data)
-        // VPN permission result (ML Kit scan results come through its own
-        // Task callback, not via onActivityResult)
+        // VPN permission result; scanner and file results are dispatched above.
         if (requestCode == VPN_REQUEST_CODE && resultCode == RESULT_OK) {
             startVpnService()
         } else if (requestCode == VPN_REQUEST_CODE) {

@@ -1,6 +1,6 @@
 # ProGuard rules for nospoon release builds.
 # R8 + resource shrinker run in release; without these rules the JNI
-# bridge and Code Scanner integration break in obfuscated builds.
+# bridge breaks in obfuscated builds.
 
 # ============================================================
 # JNI bridge — Native methods must keep their exact names so the
@@ -20,15 +20,6 @@
 -keepclasseswithmembernames class * {
     native <methods>;
 }
-
-# ============================================================
-# Google Code Scanner / Play Services — dynamic module loading
-# requires the public API surface to remain unobfuscated.
-# ============================================================
--keep class com.google.android.gms.** { *; }
--keep class com.google.mlkit.** { *; }
--dontwarn com.google.android.gms.**
--dontwarn com.google.mlkit.**
 
 # ============================================================
 # Kotlin coroutines — internal classes accessed reflectively by

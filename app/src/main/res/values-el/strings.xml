@@ -64,6 +64,7 @@
 
     <!-- Σαρωτής -->
     <string name="scan_qr_prompt">Σαρώστε κωδικό QR</string>
+    <string name="scan_camera_permission">Δεν δόθηκε άδεια κάμερας. Εισάγετε κλειδιά ή αρχείο.</string>
 
     <!-- Επιβεβαίωση διαγραφής -->
     <string name="delete_configuration_title">Διαγραφή διαμόρφωσης;</string>

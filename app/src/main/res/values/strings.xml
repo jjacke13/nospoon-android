@@ -64,6 +64,7 @@
 
     <!-- Scanner -->
     <string name="scan_qr_prompt">Scan QR code</string>
+    <string name="scan_camera_permission">Camera denied. Enter keys or import a file.</string>
 
     <!-- Delete confirmation -->
     <string name="delete_configuration_title">Delete configuration?</string>
