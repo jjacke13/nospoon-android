@@ -103,7 +103,7 @@ class NospoonVpnService : VpnService() {
                 val config = try {
                     JSONObject(configJson)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Invalid config JSON: ${e.message}")
+                    Log.e(TAG, "Invalid config JSON")
                     return START_NOT_STICKY
                 }
                 if (!config.has("server")) return START_NOT_STICKY

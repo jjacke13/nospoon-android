@@ -87,6 +87,10 @@ android {
         viewBinding = true
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -105,6 +109,9 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16.1")
+
     // Coroutines — required by the hyperdht-cpp Kotlin wrapper
     // (HyperDHT uses suspend fns + Channel/Flow for stream data).
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")

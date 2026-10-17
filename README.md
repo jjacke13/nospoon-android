@@ -121,6 +121,15 @@ creation and the Play Console checklist: `docs/PLAYSTORE.md`.
 Run `./build.sh` once so `jniLibs/` is populated, then open this directory and
 build normally. Studio does not fetch the JNI lib.
 
+### Local checks
+
+```bash
+nix-shell --run './gradlew testDebugUnitTest lintDebug'
+```
+
+Robolectric runs the Android regression tests on the JVM. These checks do
+not open a VPN, use signing keys, or rebuild the prebuilt JNI library.
+
 ## Traps
 
 - **`local.properties` overrides `ANDROID_HOME`.** Gradle honours its

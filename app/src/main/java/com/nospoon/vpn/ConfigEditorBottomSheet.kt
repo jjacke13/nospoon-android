@@ -91,13 +91,13 @@ class ConfigEditorBottomSheet : BottomSheetDialogFragment() {
         val json = try {
             JSONObject(stripped)
         } catch (e: Exception) {
-            Log.w(TAG, "JSON parse failed: ${e.message}; first 200 chars: ${stripped.take(200)}")
+            Log.w(TAG, "JSON parse failed")
             Toast.makeText(context, R.string.invalid_json_qr, Toast.LENGTH_LONG).show()
             return
         }
 
         if (!json.has("server")) {
-            Log.w(TAG, "JSON keys: ${json.keys().asSequence().toList()} — no 'server'")
+            Log.w(TAG, "Config missing server")
             Toast.makeText(context, R.string.qr_missing_server, Toast.LENGTH_LONG).show()
             return
         }
@@ -108,7 +108,7 @@ class ConfigEditorBottomSheet : BottomSheetDialogFragment() {
         inputIpField?.setText(config.ip)
         fullTunnelSwitch?.isChecked = config.fullTunnel
 
-        Log.d(TAG, "config applied: server=${config.server.take(8)}…, ip=${config.ip}")
+        Log.d(TAG, "Config imported")
         Toast.makeText(context, R.string.config_imported, Toast.LENGTH_SHORT).show()
     }
 
