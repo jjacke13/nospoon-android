@@ -10,8 +10,6 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.os.PowerManager
-import android.system.Os
-import android.system.OsConstants
 import android.util.Log
 import com.hyperdht.DhtException
 import com.hyperdht.DhtOptions
@@ -249,6 +247,7 @@ class NospoonVpnService : VpnService() {
 
         val builder = Builder()
             .setSession("nospoon")
+            .setBlocking(true) // The TUN reader waits for packets on an IO coroutine.
             .setMtu(mtu)
             .addAddress(ip, prefix)
 
@@ -377,27 +376,6 @@ class NospoonVpnService : VpnService() {
                             break
                         }
                         Log.i(TAG, "VPN interface up; starting forwarders")
-
-                        // VpnService hands us a non-blocking fd by default
-                        // on some Android versions.  FileInputStream.read()
-                        // on a non-blocking fd can return 0 immediately
-                        // when no packet is queued, which our loop would
-                        // misinterpret as EOF and exit silently — every
-                        // subsequent ping would then be dropped on read.
-                        // Force blocking mode (same as the bare-runtime
-                        // impl) so read() suspends until a packet arrives.
-                        try {
-                            val flags = Os.fcntlInt(
-                                vpnInterface!!.fileDescriptor,
-                                OsConstants.F_GETFL, 0)
-                            Os.fcntlInt(
-                                vpnInterface!!.fileDescriptor,
-                                OsConstants.F_SETFL,
-                                flags and OsConstants.O_NONBLOCK.inv())
-                            Log.d(TAG, "TUN fd set to blocking (was flags=$flags)")
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to clear O_NONBLOCK on TUN: ${e.message}")
-                        }
 
                         // Lifetime-of-VPN tun→stream pump.  Always writes
                         // to whatever stream is currently active; drops
