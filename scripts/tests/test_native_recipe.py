@@ -42,7 +42,8 @@ class ElfChecks(unittest.TestCase):
 class MetadataChecks(unittest.TestCase):
     def test_fdroid_and_ci_share_pins_and_scripts(self):
         pins = json.loads((ROOT / 'fdroid/native-sources.json').read_text())
-        metadata = yaml.safe_load((ROOT / 'fdroid/native-build.yml').read_text())
+        metadata = yaml.load((ROOT / 'fdroid/metadata/com.nospoon.vpn.yml').read_text(),
+                             Loader=yaml.BaseLoader)['Builds'][0]
         names = {'hyperdht': 'HyperDHT', 'libudx': 'libudx', 'libsodium': 'libsodium', 'libuv': 'libuv'}
         self.assertEqual(str(metadata['ndk']), pins['ndk'])
         self.assertEqual(set(metadata['srclibs']),
@@ -58,6 +59,24 @@ class MetadataChecks(unittest.TestCase):
         for script in ('prepare-native-sources.sh', 'build-jni-from-source.sh'):
             self.assertIn('scripts/' + script, workflow)
         self.assertNotIn('scanignore', metadata)
+
+    def test_release_metadata_matches_app_and_listing(self):
+        app = yaml.load((ROOT / 'fdroid/metadata/com.nospoon.vpn.yml').read_text(), Loader=yaml.BaseLoader)
+        build = app['Builds'][-1]
+        gradle = (ROOT / 'app/build.gradle.kts').read_text()
+        self.assertIn('versionName = "' + build['versionName'] + '"', gradle)
+        self.assertIn('versionCode = ' + build['versionCode'], gradle)
+        listing = ROOT / 'fastlane/metadata/android/en-US'
+        self.assertLessEqual(len((listing / 'short_description.txt').read_text().strip()), 80)
+        self.assertLessEqual(len((listing / ('changelogs/' + build['versionCode'] + '.txt')).read_text().strip()), 500)
+
+    def test_buildserver_wrapper_refuses_ordinary_local_execution(self):
+        env = dict(os.environ)
+        env.pop('GITHUB_ACTIONS', None)
+        result = subprocess.run([str(ROOT / 'scripts/fdroid-container-check.sh'), '0' * 40],
+                                env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('dedicated GitHub Actions buildserver container', result.stdout)
 
 
 class RecipeChecks(unittest.TestCase):
@@ -87,6 +106,7 @@ class RecipeChecks(unittest.TestCase):
         (self.udx / 'include').mkdir()
         (self.udx / 'src/udx.c').write_text('fixture, not compiled')
         (self.udx / 'LICENSE').write_text('fixture')
+        (self.udx / 'NOTICE').write_text('fixture notice')
         self.sodium = self.base / 'sodium'
         self.sodium.mkdir()
         self.executable(self.sodium / 'configure', "#!/bin/sh\nPACKAGE_VERSION='1.0.22'\nexit 0\n")
@@ -142,6 +162,7 @@ fi
             self.assertEqual(result.returncode, 0, result.stdout)
         cpp = self.hyper / 'wrappers/kotlin/src/main/cpp/hyperdht_jni.cpp'
         self.assertIn('AttachCurrentThread(&env, nullptr)', cpp.read_text())
+        self.assertEqual((self.hyper / 'deps/libudx/NOTICE').read_text(), 'fixture notice')
         cpp.write_text(cpp.read_text().replace('AttachCurrentThread(&env, nullptr)', 'unexpected_call()'))
         self.assertNotEqual(self.prepare().returncode, 0)
         wrapper = self.hyper / 'wrappers/kotlin/src/main/kotlin/com/hyperdht/Native.kt'

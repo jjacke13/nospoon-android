@@ -1,0 +1,42 @@
+name: F-Droid metadata and build validation
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fdroid:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    container:
+      image: registry.gitlab.com/fdroid/fdroidserver@sha256:9cb68105642ca4e7b295f0ceab10f069f5b3247dc18fa7c36046e9d81aa469a8 # buildserver-trixie
+      options: --user root
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Run F-Droid's parser, lint, source scanner and build
+        run: scripts/fdroid-container-check.sh "$GITHUB_SHA"
+      - name: Collect validation artifacts
+        if: always()
+        run: |
+          mkdir -p build/fdroid-result
+          if [ -d /tmp/fdroiddata/logs ]; then
+            cp -a /tmp/fdroiddata/logs build/fdroid-result/
+          fi
+          for apk in /tmp/fdroiddata/tmp/*.apk /tmp/fdroiddata/unsigned/*.apk; do
+            if [ -f "$apk" ]; then cp "$apk" build/fdroid-result/; fi
+          done
+          if [ -f /tmp/fdroiddata/metadata/com.nospoon.vpn.yml ]; then
+            cp /tmp/fdroiddata/metadata/com.nospoon.vpn.yml build/fdroid-result/
+          fi
+          report=/tmp/fdroiddata/build/com.nospoon.vpn/build/native-source/elf.txt
+          if [ -f "$report" ]; then cp "$report" build/fdroid-result/; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: fdroid-validation
+          if-no-files-found: error
+          path: build/fdroid-result/

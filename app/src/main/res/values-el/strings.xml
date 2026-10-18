@@ -110,6 +110,10 @@
     <string name="about_title">Σχετικά με το nospoon</string>
     <string name="about_message">nospoon — peer-to-peer VPN over HyperDHT.\n\nΈκδοση %1$s\n\nΧωρίς κεντρικό διακομιστή, δημόσια IP ή προώθηση θυρών.\nΜόνο ένα κλειδί.</string>
     <string name="about_github">GitHub</string>
+    <string name="licenses_title">Άδειες χρήσης</string>
+    <string name="licenses_list">Λίστα αδειών</string>
+    <string name="licenses_close">Κλείσιμο</string>
+    <string name="licenses_no_browser">Δεν υπάρχει πρόγραμμα περιήγησης. Οι άδειες παραμένουν διαθέσιμες εκτός σύνδεσης.</string>
     <string name="ok">ΟΚ</string>
 
     <!-- Αναίρεση διαγραφής -->

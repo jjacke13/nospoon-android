@@ -421,6 +421,9 @@ class MainActivity : AppCompatActivity(),
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.about_title)
             .setMessage(getString(R.string.about_message, version))
+            .setNegativeButton(R.string.licenses_title) { _, _ ->
+                LicensesDialogFragment().show(supportFragmentManager, "licenses")
+            }
             .setNeutralButton(R.string.about_github) { _, _ ->
                 val url = getString(R.string.github_url)
                 try {

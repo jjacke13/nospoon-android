@@ -111,6 +111,10 @@
     <string name="about_title">About nospoon</string>
     <string name="about_message">nospoon — peer-to-peer VPN over HyperDHT.\n\nVersion %1$s\n\nNo central server, no public IP, no port forwarding.\nJust a key.</string>
     <string name="about_github">GitHub</string>
+    <string name="licenses_title">Licenses</string>
+    <string name="licenses_list">License list</string>
+    <string name="licenses_close">Close</string>
+    <string name="licenses_no_browser">No browser available; bundled licenses remain available offline.</string>
     <string name="ok">OK</string>
     <string name="github_url" translatable="false">https://github.com/jjacke13/nospoon</string>
 

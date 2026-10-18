@@ -1,0 +1,4 @@
+Replace Google Play Services scanning with a bundled QR-only scanner.
+Build the native networking library from pinned public sources for F-Droid.
+Preserve imported MTU settings and clear omitted client seeds.
+Improve Android 8 compatibility and keep scanner prompts clear of system bars.

@@ -55,9 +55,9 @@ The app-owned CMake driver avoids the native repo's prebuilt-wrapper target.
 [F-Droid requires builds from public source](https://f-droid.org/en/docs/Inclusion_Policy/).
 The CI artifact is verification material, not an input for F-Droid.
 
-`fdroid/native-build.yml` is a fragment for a release's `Builds` entry in
-fdroiddata. Add the app's published commit, version and normal app metadata
-separately. `subdir: app` is deliberate: F-Droid's Gradle APK discovery runs
+`fdroid/metadata/com.nospoon.vpn.yml` is the proposed complete fdroiddata
+metadata for version 0.1.2 / code 4. It references the proposed `v0.1.2` tag;
+create/publish that tag only after the candidate has passed validation. `subdir: app` is deliberate: F-Droid's Gradle APK discovery runs
 there, while scripts locate the repository root themselves.
 
 Copy the proposed definitions in `fdroid/srclibs/` into fdroiddata's `srclibs/`
@@ -81,11 +81,35 @@ python3 -m unittest discover -s scripts/tests -v  # PyYAML needed for metadata c
 shellcheck scripts/*-source*.sh
 ```
 
-A remote clean source build, then F-Droid's actual scanner/build environment,
-remain required. A green GitHub job alone is not F-Droid acceptance or proof
-of reproducibility. Test JNI loading, connect/disconnect, traffic and
-reconnection on a phone before selecting a release. Full app metadata,
-license/dependency review and inclusion submission remain separate work.
+The first shared-script rehearsal passed at app commit `694c912`:
+[run 39133709420](https://github.com/jjacke13/nospoon-android/actions/runs/39133709420).
+The exact CI-built JNI was installed in a development app and a phone VPN
+connection was confirmed. This does not establish handover, sustained traffic,
+reproducibility or F-Droid acceptance.
+
+The separate manual **F-Droid metadata and build validation** job runs the
+real fdroidserver parser/lint/source-scanner/build commands inside the official
+buildserver-trixie container, pinned by digest. It pins fdroidserver and
+fdroiddata configuration revisions too. Its wrapper refuses ordinary local
+execution; never run native compilation on the development laptop.
+
+In that disposable container, the committed metadata is copied into fdroiddata
+and only its build commit is replaced with the exact GitHub run SHA. This tests
+the candidate before publishing a release tag. Native sources still come from
+the declared srclibs, and compilation is performed by the metadata's build
+command. The container's root account is locked and sudo removed by
+fdroidserver's normal `--on-server` path; no host setting changes.
+
+The job uploads logs, test APKs, the effective metadata and the native ELF
+report. It does not sign, publish or submit. A passing run is build evidence;
+maintainer review remains required. Copy the proposed metadata/srclib files
+into fdroiddata for a New App merge request after choosing/tagging the validated
+release. Do not upload listing screenshots into fdroiddata: the standard
+`fastlane/metadata/android/en-US/` tree in this app repo supplies them.
+
+The listing, [license inventory](THIRD-PARTY.md), APK-packaged notices and
+source/relink directions are prepared for this candidate. The next remote
+validation and inclusion review remain pending.
 
 [Android's 16 KiB guidance](https://developer.android.com/guide/practices/page-sizes)
 requires both compatible ELF segments and APK packaging; the rehearsal checks

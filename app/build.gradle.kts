@@ -42,8 +42,8 @@ android {
         applicationId = "com.nospoon.vpn"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.1.1"
+        versionCode = 4
+        versionName = "0.1.2"
         ndk {
             // libhyperdht_jni.so is shipped only for arm64-v8a; restrict
             // the APK to that ABI so we don't end up with broken builds

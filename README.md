@@ -199,3 +199,14 @@ above.
 
 `FRONTEND-TODO.md` — export config to file, long-press card menu, DiffUtil,
 connection-log screen, surfacing IP/uptime/bytes in the UI.
+
+## License and F-Droid preparation
+
+The application and original project assets are distributed under
+[GPL-3.0-only](LICENSE). Third-party components retain their own licenses;
+[the inventory and notice provenance](docs/THIRD-PARTY.md) describe them.
+About → Licenses provides the bundled texts offline.
+
+[F-Droid preparation and validation](docs/FDROID.md) includes the listing,
+pinned source-build recipe and proposed fdroiddata metadata. This is not yet
+an accepted F-Droid release.

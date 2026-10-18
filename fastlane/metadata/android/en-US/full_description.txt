@@ -1,0 +1,13 @@
+nospoon connects your Android device to a nospoon server that you run or manage. HyperDHT establishes encrypted peer-to-peer connections, with NAT traversal to help peers reach each other.
+
+Features:
+• Private-network mode routes traffic for your configured subnet through the tunnel.
+• Full-tunnel mode routes IPv4 Internet traffic through your own server.
+• Import connection profiles from QR codes or JSON files, or enter them manually.
+• Manage multiple profiles and use client keys for servers that require them.
+• Bundled QR scanner with no Google Play Services dependency.
+• English and Greek interface, with no advertising or analytics SDKs.
+
+A configured nospoon server is required. This app does not provide hosted VPN servers or a VPN subscription. Server setup instructions are available on the project website.
+
+The VPN currently supports IPv4 and arm64 devices running Android 8.0 or later. Full-tunnel mode configures Cloudflare and Google public DNS resolvers. Camera permission is used only when you choose to scan a QR code; manual entry and file import remain available.
