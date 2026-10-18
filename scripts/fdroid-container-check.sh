@@ -27,6 +27,7 @@ import sys
 from ruamel.yaml import YAML
 path = Path('/tmp/fdroiddata/metadata/com.nospoon.vpn.yml')
 yaml = YAML()
+yaml.indent(mapping=2, sequence=4, offset=2)
 data = yaml.load(path)
 # Test this exact commit without creating/publishing the release tag.
 data['Builds'][-1]['commit'] = sys.argv[1]
