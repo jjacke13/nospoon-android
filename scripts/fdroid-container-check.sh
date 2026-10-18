@@ -6,7 +6,7 @@ set -euo pipefail
 }
 [[ $# == 1 && "$1" =~ ^[0-9a-f]{40}$ ]] || { echo 'Expected the app commit SHA' >&2; exit 2; }
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
-git -C "$repo_root" rev-parse --show-toplevel
+git -c safe.directory="$repo_root" -C "$repo_root" rev-parse --show-toplevel
 # Pin the same F-Droid tools/configuration for repeatable rehearsal inputs.
 git clone --no-checkout https://gitlab.com/fdroid/fdroidserver.git /tmp/fdroid-tools
 git -C /tmp/fdroid-tools rev-parse --show-toplevel
