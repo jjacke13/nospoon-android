@@ -5,6 +5,8 @@ app/build/
 
 # NDK CMake intermediates (libnospoon_exec.so build tree)
 app/.cxx/
+_native/
+__pycache__/
 
 # IDE
 .idea/

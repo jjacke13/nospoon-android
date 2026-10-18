@@ -1,0 +1,11 @@
+cmake_minimum_required(VERSION 3.22)
+project(nospoon_jni LANGUAGES C CXX)
+if(NOT ANDROID)
+    message(FATAL_ERROR "This driver requires the Android NDK toolchain")
+endif()
+add_subdirectory("${HYPERDHT_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/hyperdht" EXCLUDE_FROM_ALL)
+add_library(hyperdht_jni SHARED "${HYPERDHT_SOURCE_DIR}/wrappers/kotlin/src/main/cpp/hyperdht_jni.cpp")
+target_compile_features(hyperdht_jni PRIVATE cxx_std_20)
+target_link_libraries(hyperdht_jni PRIVATE hyperdht log dl)
+target_link_options(hyperdht_jni PRIVATE
+    "-Wl,-z,max-page-size=16384" "-Wl,-z,common-page-size=16384" "-Wl,--no-undefined")

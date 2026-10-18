@@ -1,0 +1,11 @@
+--- a/wrappers/kotlin/src/main/cpp/hyperdht_jni.cpp
++++ b/wrappers/kotlin/src/main/cpp/hyperdht_jni.cpp
+@@ -45,7 +45,7 @@
+     JNIEnv* env = nullptr;
+     if (g_jvm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_OK) return env;
+     pthread_once(&g_jni_key_once, make_key);
+-    g_jvm->AttachCurrentThread((void**)&env, nullptr);
++    g_jvm->AttachCurrentThread(&env, nullptr);
+     pthread_setspecific(g_jni_key, env);  // triggers detach_thread on exit
+     return env;
+ }

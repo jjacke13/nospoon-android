@@ -83,6 +83,9 @@ android {
         }
     }
 
+    // Native providers strip with their pinned toolchain; package those exact bytes.
+    packaging.jniLibs.keepDebugSymbols += "**/libhyperdht_jni.so"
+
     buildFeatures {
         viewBinding = true
     }

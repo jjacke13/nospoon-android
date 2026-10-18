@@ -1,0 +1,13 @@
+# Merge into a release's Builds entry in fdroiddata; not complete app metadata.
+# Select a published app commit/version only after the rehearsal has passed.
+subdir: app
+gradle:
+  - 'yes'
+ndk: 27.3.13750724
+srclibs:
+  - HyperDHT@5587e3f21b086beeb1fa8afdf3cfecc46e1623e5
+  - libudx@759bf7641347f65a1896d4bc4c3b1606a459f466
+  - libsodium@77e1ce5d6dee871c49ef211222ba18ef0c486bda
+  - libuv@5152db2cbfeb5582e9c27c5ea1dba2cd9e10759b
+prebuild: ../scripts/prepare-native-sources.sh "$$HyperDHT$$" "$$libudx$$"
+build: ../scripts/build-jni-from-source.sh "$$HyperDHT$$" "$$libsodium$$" "$$libuv$$" "$$NDK$$" "$(pwd)/../build/native-source" "$(pwd)/src/main/jniLibs/arm64-v8a/libhyperdht_jni.so"
