@@ -18,7 +18,6 @@ git -C /tmp/fdroiddata sparse-checkout set config srclibs
 git -C /tmp/fdroiddata checkout --detach 024de33958252e3c740b874a92122357fe4746dd
 mkdir -p /tmp/fdroiddata/metadata
 cp "$repo_root/fdroid/metadata/com.nospoon.vpn.yml" /tmp/fdroiddata/metadata/
-cp "$repo_root"/fdroid/srclibs/*.yml /tmp/fdroiddata/srclibs/
 printf '{}\n' > /tmp/fdroiddata/config.yml
 chmod 600 /tmp/fdroiddata/config.yml
 python3 - "$1" <<'PY'
@@ -46,7 +45,10 @@ cd /tmp/fdroiddata
 sdkmanager "platforms;android-36" "build-tools;36.0.0"
 fdroid readmeta
 fdroid lint com.nospoon.vpn
+cp metadata/com.nospoon.vpn.yml /tmp/fdroid-metadata-before.yml
+fdroid rewritemeta com.nospoon.vpn
+cmp /tmp/fdroid-metadata-before.yml metadata/com.nospoon.vpn.yml
 build_spec=$(cat build-spec.txt)
 fdroid fetchsrclibs "$build_spec"
-fdroid build --verbose --test --on-server --no-tarball --refresh-scanner "$build_spec"
+fdroid build --verbose --test --on-server --no-tarball --refresh-scanner --scan-binary "$build_spec"
 INNER'

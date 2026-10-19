@@ -1,0 +1,1 @@
+Native dependencies are pinned as Git submodules for source builds. Build paths and linker metadata are normalized for reproducible F-Droid packaging. No VPN configuration changes.

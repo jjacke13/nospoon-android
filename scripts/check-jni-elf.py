@@ -10,6 +10,8 @@ def check(report, declarations):
         raise ValueError("Expected an ELF64 AArch64 library")
     if not re.search(r"Type:\s+DYN\b", report):
         raise ValueError("Expected a shared object")
+    if "Build ID:" in report:
+        raise ValueError("Path-dependent GNU build IDs must be disabled")
     loads = [line.split() for line in report.splitlines() if line.strip().startswith("LOAD ")]
     if not loads or any(int(fields[-1], 16) < 16384 for fields in loads):
         raise ValueError("Every LOAD segment must support 16 KiB pages")

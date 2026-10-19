@@ -25,7 +25,8 @@ Kotlin                                   Native (libhyperdht_jni.so)
 The `com.hyperdht` Kotlin wrapper is vendored from
 `hyperdht-cpp/wrappers/kotlin`. Ordinary laptop builds reuse hyperdht-cpp's
 CI binary. The separate [F-Droid source-build recipe](docs/FDROID.md) builds
-JNI from pinned public sources on a Linux CI/F-Droid host.
+JNI from pinned Git submodules on a Linux CI/F-Droid host. Fetching these
+modules downloads source only; ordinary laptop builds still use the prebuilt JNI.
 
 ### Startup sequence — DHT first, VPN later
 

@@ -1,6 +1,7 @@
 # Licenses and publication assets
 
-Reviewed for the 0.1.2 candidate on 2026-10-18. The application is distributed
+Reviewed on 2026-10-18; the 0.1.3 packaging update retains the same
+native revisions, Android runtime dependencies and license texts. The application is distributed
 under GPL-3.0-only; [LICENSE](../LICENSE) contains the full text. Original
 project artwork and listing material use the same project license. Vendored
 components retain their own licenses and attribution notices.

@@ -1,4 +1,5 @@
 """Safety checks use mocked tools only; no native compilation."""
+import configparser
 import importlib.util
 import json
 import os
@@ -32,7 +33,8 @@ class ElfChecks(unittest.TestCase):
         ELF.check(REPORT, DECLARATIONS)
         for broken in (REPORT.replace('0x4000', '0x1000'), REPORT.replace('AArch64', 'X86-64'),
                        REPORT.replace('[libc.so]', '[libc++_shared.so]'),
-                       REPORT.replace('12 JNI_OnLoad', 'UND JNI_OnLoad')):
+                       REPORT.replace('12 JNI_OnLoad', 'UND JNI_OnLoad'),
+                       REPORT + 'Build ID: 1234\n'):
             with self.subTest(report=broken), self.assertRaises(ValueError):
                 ELF.check(broken, DECLARATIONS)
         with self.assertRaises(ValueError):
@@ -44,15 +46,22 @@ class MetadataChecks(unittest.TestCase):
         pins = json.loads((ROOT / 'fdroid/native-sources.json').read_text())
         metadata = yaml.load((ROOT / 'fdroid/metadata/com.nospoon.vpn.yml').read_text(),
                              Loader=yaml.BaseLoader)['Builds'][0]
-        names = {'hyperdht': 'HyperDHT', 'libudx': 'libudx', 'libsodium': 'libsodium', 'libuv': 'libuv'}
-        self.assertEqual(str(metadata['ndk']), pins['ndk'])
-        self.assertEqual(set(metadata['srclibs']),
-                         {f"{names[name]}@{value['commit']}" for name, value in pins['sources'].items()})
-        for name in ('hyperdht', 'libudx', 'libuv'):
-            source = yaml.safe_load((ROOT / f'fdroid/srclibs/{names[name]}.yml').read_text())
-            self.assertEqual(source['Repo'], pins['sources'][name]['url'])
+        self.assertEqual(metadata['ndk'], pins['ndk'])
+        modules = configparser.ConfigParser()
+        modules.read(ROOT / '.gitmodules')
+        self.assertEqual(set(modules.sections()),
+                         {'submodule "hyperdht"', 'submodule "libsodium"', 'submodule "libuv"'})
+        for name in ('hyperdht', 'libsodium', 'libuv'):
+            self.assertEqual(modules[f'submodule "{name}"']['path'], 'native/' + name)
+            self.assertTrue(modules[f'submodule "{name}"']['url'].startswith('https://'))
+        self.assertEqual(set(pins), {'ndk'})
+        self.assertEqual(metadata['submodules'], 'true')
+        self.assertNotIn('srclibs', metadata)
+        self.assertEqual(metadata['prebuild'], '../scripts/prepare-native-sources.sh ../native/hyperdht')
         workflow = (ROOT / '.github/workflows/native-source.yml').read_text()
         yaml.safe_load(workflow)
+        self.assertIn('submodules: recursive', workflow)
+        self.assertNotIn('git clone', workflow)
         self.assertIn('scripts/prepare-native-sources.sh', metadata['prebuild'])
         self.assertNotIn('build-jni', metadata['prebuild'])
         self.assertIn('scripts/build-jni-from-source.sh', metadata['build'])
@@ -101,7 +110,7 @@ class RecipeChecks(unittest.TestCase):
     return env;
 }
 ''')
-        self.udx = self.base / 'libudx'
+        self.udx = self.hyper / 'deps/libudx'
         (self.udx / 'src').mkdir(parents=True)
         (self.udx / 'include').mkdir()
         (self.udx / 'src/udx.c').write_text('fixture, not compiled')
@@ -150,7 +159,7 @@ fi
                               env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     def prepare(self):
-        return self.run_script('prepare-native-sources.sh', self.hyper, self.udx)
+        return self.run_script('prepare-native-sources.sh', self.hyper)
 
     def build(self):
         return self.run_script('build-jni-from-source.sh', self.hyper, self.sodium, self.uv,
@@ -167,6 +176,10 @@ fi
         self.assertNotEqual(self.prepare().returncode, 0)
         wrapper = self.hyper / 'wrappers/kotlin/src/main/kotlin/com/hyperdht/Native.kt'
         wrapper.write_text('incompatible JNI declarations')
+        self.assertNotEqual(self.prepare().returncode, 0)
+
+    def test_missing_nested_submodule_fails_preparation(self):
+        shutil.rmtree(self.udx)
         self.assertNotEqual(self.prepare().returncode, 0)
 
     def test_mock_build_packages_only_after_validation(self):
