@@ -67,6 +67,9 @@ replace `commit` with the full validated release SHA before submitting it.
 `subdir: app` is deliberate: F-Droid's Gradle APK discovery runs there, while
 scripts locate the repository root themselves. `submodules: true` makes
 F-Droid fetch the native sources recursively. No custom srclibs are needed.
+The recipe removes unused JavaScript package/example metadata and a libuv
+Keynote documentation archive before scanning; none is used by the C/C++
+build. The remaining source tree is scanned without exclusions.
 
 For developer-signed distribution, the fdroiddata entry must also include
 `Binaries` pointing to the versioned release APK and `AllowedAPKSigningKeys`

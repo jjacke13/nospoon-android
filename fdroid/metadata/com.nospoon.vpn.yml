@@ -23,6 +23,10 @@ Builds:
       - sdkmanager "platforms;android-36" "build-tools;36.0.0"
     gradle:
       - yes
+    rm:
+      - native/hyperdht/deps/libudx/package.json
+      - native/hyperdht/examples/js
+      - native/libuv/docs/src/static/diagrams.key
     prebuild: ../scripts/prepare-native-sources.sh ../native/hyperdht
     build: ../scripts/build-jni-from-source.sh ../native/hyperdht ../native/libsodium
       ../native/libuv "$$NDK$$" "$(pwd)/../build/native-source" "$(pwd)/src/main/jniLibs/arm64-v8a/libhyperdht_jni.so"
