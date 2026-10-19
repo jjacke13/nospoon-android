@@ -79,6 +79,12 @@ rewrite ZIP padding. Keep the signed APK and tag immutable. Verify a fresh
 source rebuild against that public signature before updating the submission.
 No v0.1.2-specific alignment/build-ID workaround belongs in a new release.
 
+Generated ART baseline profiles are disabled because their contents can vary
+between otherwise identical builds, as documented in
+[F-Droid's reproducibility guidance](https://f-droid.org/en/docs/Reproducible_Builds/#bug-baselineprof-not-deterministic).
+This omits bundled startup optimization hints; Android can still optimize
+the app normally after installation. R8 optimization remains enabled.
+
 As described in the [metadata reference](https://f-droid.org/en/docs/Build_Metadata_Reference/),
 `prebuild` prepares source before scanning and source archiving; `build` runs
 native compilation afterwards. Do not move compilation into `prebuild`,

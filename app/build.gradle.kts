@@ -111,6 +111,13 @@ android {
     }
 }
 
+// AGP's generated startup profiles can vary between otherwise identical builds.
+tasks.configureEach {
+    if (name.contains("ArtProfile")) {
+        enabled = false
+    }
+}
+
 dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.16.1")
