@@ -51,6 +51,15 @@ Full-tunnel mode adds `0.0.0.0/0` + `addDisallowedApplication(packageName)`
 (the app's own DHT traffic bypasses the tunnel) + DNS 1.1.1.1 / 8.8.8.8.
 Split mode routes only the configured subnet.
 
+Connections start manually and are not restored after a reboot or app process
+death. Always-on VPN is disabled on Android 8.1 and newer until automatic
+connection restoration is supported. Android 8.0 cannot honor this opt-out;
+its always-on setting is unsupported.
+
+Saved profiles include client seeds and are excluded from Android's automatic
+cloud backups and device-to-device transfers. Existing profiles remain on the
+device after an app update; re-import them when setting up another device.
+
 ## Prerequisites
 
 - Android SDK: platform 36, build-tools 36.0.0
@@ -173,6 +182,9 @@ false (`VpnConfig.kt`). The service passes the object through to the wrapper
 and reads `ip` / `mtu` / `fullTunnel` itself when building the TUN.
 
 ### QR and file import
+
+Open **Help & documentation** from the main menu or the empty configurations
+screen for the setup and server guides.
 
 The editor has three scan buttons (`ConfigEditorBottomSheet.ScanTarget`):
 **server key**, **client seed**, or a **full config** JSON that fills every

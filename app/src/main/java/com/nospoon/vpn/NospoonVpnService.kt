@@ -106,7 +106,8 @@ class NospoonVpnService : VpnService() {
                 }
                 if (!config.has("server")) return START_NOT_STICKY
                 startVpn(config)
-                return START_STICKY
+                // A connection must be selected manually; there is no session restore path.
+                return START_NOT_STICKY
             }
             ACTION_STOP -> {
                 cleanup()

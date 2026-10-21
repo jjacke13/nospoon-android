@@ -96,8 +96,9 @@
     <!-- Empty state -->
     <LinearLayout
         android:id="@+id/emptyState"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginHorizontal="24dp"
         android:orientation="vertical"
         android:gravity="center"
         android:visibility="gone"
@@ -110,6 +111,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/empty_no_configs"
+            android:gravity="center"
             android:textColor="?attr/colorOnSurfaceVariant"
             android:textAppearance="?attr/textAppearanceTitleMedium" />
 
@@ -117,9 +119,20 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/empty_tap_plus"
+            android:gravity="center"
             android:textColor="?attr/colorOnSurfaceVariant"
             android:textAppearance="?attr/textAppearanceBodyMedium"
             android:layout_marginTop="4dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/documentationButton"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:minHeight="48dp"
+            android:singleLine="false"
+            android:text="@string/menu_documentation" />
     </LinearLayout>
 
     <!-- Config list -->

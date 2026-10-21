@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Profiles contain client seeds and must stay out of automatic backups. -->
+    <exclude domain="sharedpref" path="nospoon_configs.xml" />
+    <exclude domain="sharedpref" path="nospoon_configs.xml.bak" />
+</full-backup-content>

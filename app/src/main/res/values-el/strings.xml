@@ -106,6 +106,9 @@
     <string name="cd_copy">Αντιγραφή</string>
 
     <!-- Άνω γραμμή / Σχετικά -->
+    <string name="menu_documentation">Βοήθεια και τεκμηρίωση</string>
+    <string name="documentation_no_browser">Δεν υπάρχει διαθέσιμο πρόγραμμα περιήγησης.</string>
+    <string name="copy_link">Αντιγραφή συνδέσμου</string>
     <string name="menu_about">Σχετικά</string>
     <string name="about_title">Σχετικά με το nospoon</string>
     <string name="about_message">nospoon — peer-to-peer VPN over HyperDHT.\n\nΈκδοση %1$s\n\nΧωρίς κεντρικό διακομιστή, δημόσια IP ή προώθηση θυρών.\nΜόνο ένα κλειδί.</string>

@@ -107,6 +107,10 @@
     <string name="cd_copy">Copy</string>
 
     <!-- Top app bar / About -->
+    <string name="menu_documentation">Help &amp; documentation</string>
+    <string name="documentation_url" translatable="false">https://jjacke13.github.io/nospoon/</string>
+    <string name="documentation_no_browser">No browser available.</string>
+    <string name="copy_link">Copy link</string>
     <string name="menu_about">About</string>
     <string name="about_title">About nospoon</string>
     <string name="about_message">nospoon — peer-to-peer VPN over HyperDHT.\n\nVersion %1$s\n\nNo central server, no public IP, no port forwarding.\nJust a key.</string>

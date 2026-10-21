@@ -2,6 +2,9 @@ package com.nospoon.vpn
 
 import android.Manifest
 import androidx.appcompat.app.AppCompatActivity
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -136,6 +139,10 @@ class MainActivity : AppCompatActivity(),
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                R.id.action_documentation -> {
+                    openDocumentation()
+                    true
+                }
                 R.id.action_about -> { showAboutDialog(); true }
                 else -> false
             }
@@ -156,6 +163,7 @@ class MainActivity : AppCompatActivity(),
         updateEmptyState()
 
         fabAdd.setOnClickListener { showConfigEditor(null) }
+        findViewById<View>(R.id.documentationButton).setOnClickListener { openDocumentation() }
 
         disconnectButton.setOnClickListener {
             disconnect()
@@ -412,6 +420,20 @@ class MainActivity : AppCompatActivity(),
         val hasConfigs = adapter.itemCount > 0
         emptyState.visibility = if (hasConfigs) View.GONE else View.VISIBLE
         configList.visibility = if (hasConfigs) View.VISIBLE else View.GONE
+    }
+
+    private fun openDocumentation() {
+        val url = getString(R.string.documentation_url)
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (_: ActivityNotFoundException) {
+            Snackbar.make(findViewById(R.id.rootContainer), R.string.documentation_no_browser, Snackbar.LENGTH_LONG)
+                .setAction(R.string.copy_link) {
+                    getSystemService(ClipboardManager::class.java).setPrimaryClip(
+                        ClipData.newPlainText(getString(R.string.menu_documentation), url)
+                    )
+                }.show()
+        }
     }
 
     private fun showAboutDialog() {

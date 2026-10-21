@@ -16,6 +16,8 @@
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:theme="@style/Theme.Nospoon"
         android:supportsRtl="true">
 
@@ -45,6 +47,9 @@
             android:foregroundServiceType="specialUse"
             android:exported="false"
             android:stopWithTask="false">
+            <meta-data
+                android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON"
+                android:value="false" />
             <!-- Required by Play Store for SDK 34+ apps using
                  FOREGROUND_SERVICE_SPECIAL_USE. Justification text is
                  shown to reviewers. -->
