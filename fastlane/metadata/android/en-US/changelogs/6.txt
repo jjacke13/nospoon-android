@@ -1,0 +1,1 @@
+Keep VPN profiles and recovery copies out of Android backups and device transfers. Disable unsupported always-on VPN and automatic service restart. Add Help & documentation in the menu and empty profile list, with a copy-link fallback when no browser is installed.

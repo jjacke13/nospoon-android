@@ -61,9 +61,10 @@ The app-owned CMake driver avoids the native repo's prebuilt-wrapper target.
 [F-Droid requires builds from public source](https://f-droid.org/en/docs/Inclusion_Policy/).
 The CI artifact is verification material, not an input for F-Droid.
 
-`fdroid/metadata/com.nospoon.vpn.yml` is the proposed complete fdroiddata
-metadata for version 0.1.3 / code 5. Its tag is a release-preparation placeholder;
-replace `commit` with the full validated release SHA before submitting it.
+`fdroid/metadata/com.nospoon.vpn.yml` is the build rehearsal metadata for
+version 0.1.4 / code 6. Its `v0.1.4` tag is reserved for release; the CI wrapper
+tests a candidate by substituting the run's exact source SHA. For a new
+release, update the version/code and use its full validated SHA in fdroiddata.
 `subdir: app` is deliberate: F-Droid's Gradle APK discovery runs there, while
 scripts locate the repository root themselves. `submodules: true` makes
 F-Droid fetch the native sources recursively. No custom srclibs are needed.
@@ -120,16 +121,76 @@ build command. The container's root account is locked and sudo removed by
 fdroidserver's normal `--on-server` path; no host setting changes.
 
 The job uploads logs, test APKs, the effective metadata and the native ELF
-report. It does not sign, publish or submit. A passing run is build evidence;
-maintainer review remains required. Copy the proposed metadata file
-into fdroiddata for a New App merge request after choosing/tagging the validated
-release. Do not upload listing screenshots into fdroiddata: the standard
+report. It does not sign, publish, submit, or compare a developer signature.
+Use the release checks below before updating the existing fdroiddata merge
+request. Do not upload listing screenshots into fdroiddata: the standard
 `fastlane/metadata/android/en-US/` tree in this app repo supplies them.
 
 The listing, [license inventory](THIRD-PARTY.md), APK-packaged notices and
-source/relink directions are prepared for this candidate. The 0.1.3 remote
-validation, signed-release verification and inclusion review remain pending.
+source/relink directions accompany the recipe. Version 0.1.3 passed both
+rehearsals, independent APK comparison, developer-signature verification and
+[F-Droid's nine-job pipeline](https://gitlab.com/fdroid/fdroiddata/-/pipelines/2971309120).
+The [submission](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/53287)
+is awaiting review as of 2026-10-21.
 
 [Android's 16 KiB guidance](https://developer.android.com/guide/practices/page-sizes)
 requires both compatible ELF segments and APK packaging; the rehearsal checks
 both. No signing keys, Play access or CI secrets are required by this job.
+
+## Required checks for every release
+
+Apply these checks to every distributed update, including Kotlin-only and UI
+changes. Development APKs use a separate debug key and are not release
+artifacts. The existing v0.1.3 tag and APK must remain unchanged.
+
+1. **Prepare the source.** Increment `versionName` and `versionCode`, update
+   the recipe, changelog, and versioned source/license links together. Review
+   dependency and asset changes against the
+   [inclusion policy](https://f-droid.org/docs/Inclusion_Policy/): freely
+   licensed dependencies, public source, complete notices, and no proprietary
+   runtime SDKs. Keep dependency revisions and toolchains pinned. Run the
+   recipe tests above, Kotlin unit tests and lint, then test the affected
+   behavior on a phone. A development build reusing JNI is only this local
+   preflight; native source compilation stays in CI.
+2. **Validate one committed revision in CI.** After approval to push the
+   candidate branch, dispatch both workflows at that same commit: **F-Droid
+   source-build rehearsal** and **F-Droid metadata and build validation**.
+   Require passing Kotlin tests, metadata parsing/lint/canonical formatting,
+   source and APK scanning, native ELF checks and APK alignment. Compare the
+   complete unsigned APKs byte for byte, not just their JNI or DEX payloads.
+   Save both run URLs, source SHA, effective metadata and APK checksums.
+   Any source change after validation requires new runs at the new revision.
+3. **Sign the validated artifact.** With release signing authorized, use the
+   exact official-container unsigned APK, without rebuilding it. Use the
+   existing developer key locally with build-tools 36.0.0 `apksigner sign`,
+   `--alignment-preserved true` and `--v4-signing-enabled false`. Keep keys
+   and passwords out of CI, logs and source control. Verify with `apksigner
+   verify --verbose --print-certs`: one signer, valid v2/v3 signatures, and
+   certificate SHA-256
+   `00c019ec8ecc45f7cc014c42fa8d983cb84e918dc0200b062fdfbd95d6d683ea`.
+   Check `zipalign -c -P 16 -v 4`, package/version/SDK/ABI, and unchanged
+   unsigned payload entries. A valid signature alone is insufficient.
+4. **Prove reproducibility of the signed APK.** Use F-Droid's public-signature
+   copying procedure (`apksigcopier`) to copy the signed APK's signature onto
+   the independent source-built APK from step 2. Require the reconstructed
+   APK to verify with `apksigner` and match the signed release byte for byte.
+   This check needs only the public APK, not the signing key. Do not repair
+   differences by modifying the signed release. Fix the cause and repeat the
+   builds instead. See [F-Droid's reproducibility guidance](https://f-droid.org/docs/Reproducible_Builds/).
+5. **Publish and verify the final metadata.** With publication authorized,
+   tag the exact tested commit and publish the verified signed APK plus its
+   SHA-256 checksum. Download it anonymously and repeat checksum, signature
+   and reproducibility verification. Prepare the fdroiddata YAML with that
+   exact source SHA, matching version/code, `Binaries` URL and the certificate
+   pin in `AllowedAPKSigningKeys`. Check this final YAML with fdroidserver
+   readmeta, lint and rewritemeta; inspect the diff for unintended recipe
+   changes. The checked-in rehearsal YAML omits those two distribution fields
+   so unpublished candidates can be built; its pass does not validate them.
+   Preserve canonical formatter output, including URL wrapping. Update the
+   existing submission after approval and inspect its new pipeline reports.
+
+Retain the unsigned builds, signed APK, checksums, certificate fingerprint,
+verification output and exact final metadata for each release. Review current
+F-Droid tools and policy when preparing it; the pinned rehearsal environment
+does not automatically track changes on F-Droid's runners. Stop the release
+if any required check fails.
