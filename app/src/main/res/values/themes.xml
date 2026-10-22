@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <style name="Widget.Nospoon.MainAction" parent="Widget.Material3.FloatingActionButton.Primary">
+        <item name="fabCustomSize">64dp</item>
+        <item name="maxImageSize">28dp</item>
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearance.Nospoon.MainAction</item>
+    </style>
+
+    <style name="ShapeAppearance.Nospoon.MainAction" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
+
     <style name="Theme.Nospoon" parent="Base.Theme.Nospoon" />
 
     <style name="Base.Theme.Nospoon" parent="Theme.Material3.DayNight.NoActionBar">

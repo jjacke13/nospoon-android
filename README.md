@@ -183,7 +183,8 @@ and reads `ip` / `mtu` / `fullTunnel` itself when building the TUN.
 
 ### QR and file import
 
-Open **Help & documentation** from the main menu or the empty configurations
+Use the information button at the bottom left for an in-app introduction and
+setup guide. Open **Help & documentation** there, from the main menu or the empty configurations
 screen for the setup and server guides.
 
 The editor has three scan buttons (`ConfigEditorBottomSheet.ScanTarget`):

@@ -107,6 +107,14 @@
     <string name="cd_copy">Copy</string>
 
     <!-- Top app bar / About -->
+    <string name="info_action">Information and setup</string>
+    <string name="info_title">Get started with nospoon</string>
+    <string name="info_intro">nospoon connects your Android device to a server that you run or manage. HyperDHT establishes encrypted peer-to-peer connections, with NAT traversal to help peers reach each other.</string>
+    <string name="info_setup_title">Get connected</string>
+    <string name="info_setup">You need a configured nospoon server. Tap + on the main screen to add a configuration. Scan a QR code, import a JSON file, or enter the server details manually. Keep any client seed private. Save the configuration, then tap it to connect. Approve the Android VPN request if prompted.</string>
+    <string name="info_routing_title">Choose what goes through the tunnel</string>
+    <string name="info_routing">Private-network mode routes traffic for your configured subnet through the tunnel. Full-tunnel mode routes IPv4 Internet traffic through your own server. nospoon does not provide hosted VPN servers or a VPN subscription.</string>
+    <string name="info_close">Close</string>
     <string name="menu_documentation">Help &amp; documentation</string>
     <string name="documentation_url" translatable="false">https://jjacke13.github.io/nospoon/</string>
     <string name="documentation_no_browser">No browser available.</string>

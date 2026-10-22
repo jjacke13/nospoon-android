@@ -10,4 +10,6 @@ Features:
 
 A configured nospoon server is required. This app does not provide hosted VPN servers or a VPN subscription. Server setup instructions are available on the project website.
 
+On first launch, tap + to add a configuration. The information button at the bottom left explains setup and links to the documentation.
+
 The VPN currently supports IPv4 and arm64 devices running Android 8.0 or later. Full-tunnel mode configures Cloudflare and Google public DNS resolvers. Camera permission is used only when you choose to scan a QR code; manual entry and file import remain available.

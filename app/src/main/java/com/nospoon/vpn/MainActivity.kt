@@ -151,8 +151,8 @@ class MainActivity : AppCompatActivity(),
         // Apply system-bar insets as padding on the root so the status bar,
         // gesture pill, and 3-button nav don't overlap content.
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootContainer)) { v, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.updatePadding(top = bars.top, bottom = bars.bottom)
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            v.updatePadding(left = bars.left, top = bars.top, right = bars.right, bottom = bars.bottom)
             insets
         }
 
@@ -163,6 +163,11 @@ class MainActivity : AppCompatActivity(),
         updateEmptyState()
 
         fabAdd.setOnClickListener { showConfigEditor(null) }
+        findViewById<View>(R.id.fabInfo).setOnClickListener {
+            if (supportFragmentManager.findFragmentByTag("nospoon_info") == null) {
+                InfoBottomSheet().showNow(supportFragmentManager, "nospoon_info")
+            }
+        }
         findViewById<View>(R.id.documentationButton).setOnClickListener { openDocumentation() }
 
         disconnectButton.setOnClickListener {
@@ -422,12 +427,12 @@ class MainActivity : AppCompatActivity(),
         configList.visibility = if (hasConfigs) View.VISIBLE else View.GONE
     }
 
-    private fun openDocumentation() {
+    internal fun openDocumentation(anchor: View = findViewById(R.id.rootContainer)) {
         val url = getString(R.string.documentation_url)
         try {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         } catch (_: ActivityNotFoundException) {
-            Snackbar.make(findViewById(R.id.rootContainer), R.string.documentation_no_browser, Snackbar.LENGTH_LONG)
+            Snackbar.make(anchor, R.string.documentation_no_browser, Snackbar.LENGTH_LONG)
                 .setAction(R.string.copy_link) {
                     getSystemService(ClipboardManager::class.java).setPrimaryClip(
                         ClipData.newPlainText(getString(R.string.menu_documentation), url)
