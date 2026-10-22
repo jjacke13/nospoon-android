@@ -7,6 +7,14 @@ separate native binary.
 The server, the desktop clients, the wire protocol and the config-format spec
 live in the nospoon repo; this repo is only the app.
 
+## Phone screenshots
+
+| First setup | In-app guide | Connected example |
+| --- | --- | --- |
+| <img src="docs/assets/screenshots/phone-06-empty-large-hint.png" width="240" alt="Empty screen with setup instruction and add and information buttons"> | <img src="docs/assets/screenshots/phone-07-info.png" width="240" alt="Setup guide with documentation link"> | <img src="docs/assets/screenshots/phone-03-config-list.png" width="240" alt="Connected VPN configuration"> |
+
+The connected example was captured before the latest button refresh.
+
 ## Architecture
 
 ```

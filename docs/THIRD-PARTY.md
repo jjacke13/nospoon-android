@@ -1,6 +1,6 @@
 # Licenses and publication assets
 
-Reviewed on 2026-10-18; the 0.1.3 packaging update retains the same
+Reviewed on 2026-10-18; version 0.1.4 retains the same
 native revisions, Android runtime dependencies and license texts. The application is distributed
 under GPL-3.0-only; [LICENSE](../LICENSE) contains the full text. Original
 project artwork and listing material use the same project license. Vendored
@@ -52,11 +52,11 @@ mean the complete compiler or SDK is bundled in the app.
 ## Listing images
 
 The project owner confirmed creating/generating the green spoon artwork.
-The listing reuses that icon and the existing empty-list and blank-editor
-screenshots. They show no private profiles or keys; the editor address is its
-default. The obsolete Google scanner image, connected-profile screenshot and
-stale About image are excluded. No fresh phone screenshots or real server
-configuration were needed.
+The listing reuses that icon, a blank-editor screenshot, a project-owner-approved
+connection example, and phone captures of the current empty screen and setup
+guide. The connection example shows a shortened server public key and a private
+network address; no client seeds are displayed. The obsolete Google scanner
+and stale About images are excluded. Listing images updated on 2026-10-22.
 
 ## Verification limits
 
