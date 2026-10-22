@@ -126,8 +126,9 @@
                 android:layout_height="wrap_content"
                 android:text="@string/empty_tap_plus"
                 android:gravity="center"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:textColor="?attr/colorOnSurface"
+                android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:textSize="18sp"
                 android:layout_marginTop="4dp" />
 
             <com.google.android.material.button.MaterialButton
